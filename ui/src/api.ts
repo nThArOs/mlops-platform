@@ -156,7 +156,9 @@ export type Deployment = {
   production: number | null;
 };
 
-export type LiveMetrics = Record<string, [number, number][]>;
+type Points = [number, number][];
+type LiveKey = "latency_p50_ms" | "latency_p95_ms" | "requests_per_s" | "error_rate" | "confidence_mean" | "predictions_per_input";
+export type LiveMetrics = Partial<Record<LiveKey, Points>> & { stages_ms?: Record<string, Points> };
 
 export const models = {
   info: () => request<{ mlflow_url: string; prometheus_url: string }>("/api/info"),

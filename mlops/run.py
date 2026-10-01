@@ -69,7 +69,8 @@ def collect_outputs(project: Project, patterns: dict[str, str], since: float) ->
 
 def git_state(path: Path) -> dict[str, str]:
     def git(*args):
-        r = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True)
+        r = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace")
         return r.stdout.strip() if r.returncode == 0 else ""
 
     commit = git("rev-parse", "HEAD")
@@ -79,7 +80,8 @@ def git_state(path: Path) -> dict[str, str]:
 
 
 def image_id(image: str) -> str:
-    r = subprocess.run(["docker", "image", "inspect", "--format", "{{.Id}}", image], capture_output=True, text=True)
+    r = subprocess.run(["docker", "image", "inspect", "--format", "{{.Id}}", image], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise ContractError(f"docker image not found: {image} (build it first)")
     return r.stdout.strip()

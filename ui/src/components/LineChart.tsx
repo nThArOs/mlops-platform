@@ -43,6 +43,9 @@ export default function LineChart({ title, series, format, height = 150 }: {
   const sx = (t: number) => PAD.left + (x1 === x0 ? w : ((t - x0) / (x1 - x0)) * w);
   const sy = (v: number) => PAD.top + h - (v / yMax) * h;
 
+  const ends = filled.map((s) => sy(s.points[s.points.length - 1][1])).sort((a, b) => a - b);
+  const endLabels = filled.length > 1 && ends.every((y, i) => i === 0 || y - ends[i - 1] >= 12);
+
   function onMove(e: React.PointerEvent<SVGRectElement>) {
     const box = e.currentTarget.getBoundingClientRect();
     const t = x0 + ((e.clientX - box.left) / box.width) * (x1 - x0);
@@ -82,7 +85,7 @@ export default function LineChart({ title, series, format, height = 150 }: {
               <g key={s.name}>
                 <path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
                 <circle cx={sx(last[0])} cy={sy(last[1])} r={4} fill={s.color} stroke="var(--bg)" strokeWidth={2} />
-                {filled.length > 1 && (
+                {endLabels && (
                   <text className="end-label" x={sx(last[0]) + 8} y={sy(last[1]) + 4}>{s.name}</text>
                 )}
               </g>

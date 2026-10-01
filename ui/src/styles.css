@@ -221,8 +221,8 @@ dialog.modal::backdrop { background: var(--overlay); }
   .layout-2, .browser, .form-grid { grid-template-columns: 1fr; }
 }
 
-:root { --series-1: #2a78d6; --series-2: #eb6834; --grid: rgba(18, 18, 17, 0.08); }
-:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --grid: rgba(236, 235, 231, 0.08); }
+:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --grid: rgba(18, 18, 17, 0.08); }
+:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --grid: rgba(236, 235, 231, 0.08); }
 
 .chart { position: relative; }
 .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }

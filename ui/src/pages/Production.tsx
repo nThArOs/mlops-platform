@@ -75,9 +75,15 @@ function Charts({ metrics }: { metrics: LiveMetrics }) {
         series={[{ name: "errors", points: metrics.error_rate ?? [], color: c1 }]} />
       <LineChart title="Predictions per input" format={num}
         series={[{ name: "predictions", points: metrics.predictions_per_input ?? [], color: c1 }]} />
+      {Object.keys(metrics.stages_ms ?? {}).length > 0 && (
+        <LineChart title="Time per frame and stage" format={ms}
+          series={Object.keys(metrics.stages_ms!).sort().slice(0, 3).map((stage, i) => ({
+            name: stage, points: metrics.stages_ms![stage], color: `var(--series-${i + 1})`,
+          }))} />
+      )}
       {(metrics.confidence_mean?.length ?? 0) > 0 && (
         <LineChart title="Mean confidence" format={(v) => v.toFixed(2)}
-          series={[{ name: "confidence", points: metrics.confidence_mean, color: c1 }]} />
+          series={[{ name: "confidence", points: metrics.confidence_mean ?? [], color: c1 }]} />
       )}
     </div>
   );

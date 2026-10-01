@@ -22,7 +22,7 @@ def container_name(project: str) -> str:
 
 
 def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    r = subprocess.run(["docker", *args], capture_output=True, text=True)
+    r = subprocess.run(["docker", *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if check and r.returncode:
         raise ContractError(r.stderr.strip() or f"docker {args[0]} failed")
     return r
@@ -174,6 +174,14 @@ QUERIES = {
 }
 
 
+STAGES = ('sum by (stage) (rate(stage_latency_seconds_sum{{project="{p}"}}[1m])) * 1000 '
+          '/ clamp_min(sum by (stage) (rate(stage_latency_seconds_count{{project="{p}"}}[1m])), 1e-9)')
+
+
+def _finite(points: list) -> list:
+    return [p for p in points if p[1] == p[1] and abs(p[1]) != float("inf")]
+
+
 def _prometheus(path: str, params: dict) -> dict:
     url = f"{load_config()['prometheus_url']}{path}?{urllib.parse.urlencode(params)}"
     try:
@@ -191,5 +199,9 @@ def live_metrics(project: str, minutes: int = 60, step: int = 15) -> dict:
             "query": query.format(p=project), "start": end - minutes * 60, "end": end, "step": step})
         result = data.get("data", {}).get("result", [])
         points = [[float(t), float(v)] for t, v in result[0]["values"]] if result else []
-        out[key] = [p for p in points if p[1] == p[1] and abs(p[1]) != float("inf")]
+        out[key] = _finite(points)
+    data = _prometheus("/api/v1/query_range", {
+        "query": STAGES.format(p=project), "start": end - minutes * 60, "end": end, "step": step})
+    out["stages_ms"] = {r["metric"].get("stage", "?"): _finite([[float(t), float(v)] for t, v in r["values"]])
+                        for r in data.get("data", {}).get("result", [])}
     return out
