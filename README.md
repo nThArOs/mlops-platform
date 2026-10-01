@@ -1,31 +1,66 @@
 # mlops-platform
 
-Model-agnostic MLOps platform for teams that train and ship their own models, down to edge hardware. A project plugs in with a `project.yaml` ([contract](docs/contract.md)); the platform runs its commands in Docker and reads the JSON they write. Scope and status of each module: [spec](docs/spec.md).
+Model-agnostic MLOps platform for teams that train and ship their own models, down to edge hardware. A project plugs in with a `project.yaml` ([contract](docs/contract.md)); the platform runs its commands in Docker and reads the JSON they write. It never imports the project's framework. Scope and status: [spec](docs/spec.md).
 
-- **Datasets**: immutable versions stored once by content, splits, license, file browser with label overlay, diff between versions, lineage to every run and model.
-- **Training**: queue trainings from the UI with config overrides, dataset versions and a hardware profile; live log and training curves; automatic evaluation and benchmarks of the new version.
-- **Models**: several models per project, versions with their variant (architecture, export), import of existing weights, comparison on the same dataset version with 95 % intervals, confusion matrix with the scores computed from it, threshold curves and slices.
-- **Promotion**: a configurable rule (gain on the primary metric, no regression on guarded metrics, edge constraints per hardware profile), forced promotions with a reason, rollback and full history.
-- **Edge**: benchmarks under Docker CPU and memory limits (latency p50/p95/p99, per-stage time, RAM, size, GFLOPs), ONNX and INT8 exports as new versions, accuracy against latency per profile.
-- **Production**: one container per model, redeployed on promotion, live latency, throughput, errors and confidence from Prometheus, drift without labels (PSI on input and prediction histograms), live view of the frame the model sees.
+![Production service of a drone detector on a 2-CPU profile](docs/screenshots/production.png)
 
-## Screenshots
+## What it does
 
-Production service of a drone detector on a 2-CPU profile: live metrics, the last offline evaluation, drift without labels and the frame seen by the model.
+- **Datasets**: immutable versions stored once by content, splits, license, file browser, diff between versions, lineage to every run and model.
+- **Training**: queue runs from the UI with config overrides, checked datasets and a hardware profile; live log and curves; automatic evaluation and benchmarks of the new version.
+- **Models**: several models per project, variants and exports, comparison on the same dataset version with 95 % intervals, confusion matrix, threshold curves, slices, each metric colored against production.
+- **Error analysis**: every missed object and false alarm of an evaluation, thumbnails of the frame and the model input, and what changed between two versions.
+- **Sweeps and robustness**: a grid of config values queued as runs and ranked; the same evaluation repeated under the conditions a project declares, for example other video encodings.
+- **Reproducibility**: preprocessing files pinned with each version and mounted back for its evaluations and service; Git commit, image id and hardware recorded per run.
+- **Promotion**: a rule on the primary metric, guarded metrics and edge constraints per hardware profile; forced promotion with a reason, rollback, history.
+- **Edge**: benchmarks on Docker-limited profiles pinned to physical cores, ONNX and INT8 exports as new versions, accuracy against latency.
+- **Production**: one container per model, reconciled with its desired state, live latency, throughput, errors and resources against their limits, drift without labels, live view of the frame the model sees.
 
-![Production](docs/screenshots/production.png)
+## Architecture
 
-| Model versions with variants, version details, edge benchmarks | Training run with live curves and automatic promotion |
+```mermaid
+flowchart TB
+  UI[UI] --> API
+  CLI[CLI on the host] --> PG
+  subgraph control [Control plane]
+    API[API: writes intent] --> PG[(Postgres: desired state, job queue, lineage)]
+    API -. read only .-> PX[Docker proxy]
+  end
+  PG --> W[Worker: the only one driving Docker]
+  subgraph containers [Project containers, pinned cores]
+    S[Production services]
+    J[Jobs: train, evaluate, benchmark, export]
+  end
+  W -- reconciles every 5 s --> S
+  W -- runs --> J
+  PX -.-> S
+  ST[(Dataset store)] --> J
+  J --> ML[(MLflow: runs, artifacts, registry)]
+  S --> PR[(Prometheus: live metrics)]
+```
+
+The API only records intent: jobs to run and the version each service should serve. The worker claims jobs with `SKIP LOCKED`, beats while they run, and reconciles services with their desired state, so a service that dies is put back. A job whose worker stops beating for 90 s is failed and its container removed. Production services and jobs get separate physical cores, so a benchmark never shares a core with a live service.
+
+<details>
+<summary>More screenshots</summary>
+
+| Versions colored against production | Version details: operational metrics, curves, confusion matrix |
 | --- | --- |
-| ![Model](docs/screenshots/model.png) | ![Run](docs/screenshots/run.png) |
+| ![Model](docs/screenshots/model.png) | ![Details](docs/screenshots/details.png) |
 
-| Runs | Models grouped by project |
+| Errors: frame and residual input around each missed drone | Edge benchmarks against the profile's limits |
 | --- | --- |
-| ![Runs](docs/screenshots/runs.png) | ![Models](docs/screenshots/models.png) |
+| ![Errors](docs/screenshots/errors.jpg) | ![Benchmarks](docs/screenshots/benchmarks.png) |
 
-| Dataset version, splits and lineage | Datasets |
+| Sweep of a tracker threshold | Runs and queue |
 | --- | --- |
-| ![Dataset](docs/screenshots/dataset.png) | ![Datasets](docs/screenshots/datasets.png) |
+| ![Sweep](docs/screenshots/sweep.png) | ![Runs](docs/screenshots/runs.png) |
+
+| Dataset version, splits and lineage | |
+| --- | --- |
+| ![Dataset](docs/screenshots/dataset.png) | |
+
+</details>
 
 ## Start
 
@@ -39,9 +74,8 @@ docker compose up -d --build
 | API docs | http://localhost:8000/api/docs |
 | MLflow | http://localhost:5000 |
 | Prometheus | http://localhost:9090 |
-| PostgreSQL | localhost:5432 (`platform`, `mlflow`) |
 
-Everything runs in Docker: PostgreSQL, MLflow, Prometheus, the API and the worker. The API only records intent (jobs to run, the version each service should serve) and reads Docker through a read-only proxy. The worker is the only component that drives Docker: it claims jobs from the queue, and every 5 s it reconciles production services with their desired state, so a service that dies or drifts is put back. Jobs left by a lost worker are failed and their containers removed after 90 s without heartbeat. Projects are read from `MLOPS_PROJECTS_DIR` (default: the folder next to this repository), mounted at `/projects`; the platform translates paths to the host's when it mounts them into project containers. The worker is a separate container, so restarting the API never stops a running job. Credentials default to `mlops` / `mlops`, override them in `.env`. Services listen on localhost only.
+Everything runs in Docker. Projects are read from `MLOPS_PROJECTS_DIR` (default: the folder next to this repository), mounted at `/projects`; the platform translates paths to the host's when it mounts them into project containers. Credentials default to `mlops` / `mlops`, override them in `.env`. Services listen on localhost only. After a change to the platform code: `docker compose up -d --build api worker`.
 
 The CLI runs on the host against the same services:
 
@@ -53,48 +87,52 @@ mlops dataset list
 
 ## Plug in a project
 
+A project is a Docker image and a `project.yaml` naming its entrypoints, the datasets it mounts, its metrics and its promotion rule:
+
+```yaml
+name: my-detector
+image: my-detector:cpu
+datasets:
+  - { name: drones_yolo, mount: data/yolo }
+entrypoints:
+  train:    { command: "python train.py --config {config}", config: configs/train.yaml,
+              outputs: { model: "models/best.pt", metrics: "results/train.json" } }
+  evaluate: { command: "python evaluate.py --model {model}", outputs: { metrics: "results/eval.json" } }
+  benchmark: { command: "python bench.py --model {model}", outputs: { metrics: "results/bench.json" } }
+metrics: { primary: mAP50, higher_is_better: true }
+```
+
+`examples/toy-regression` is a minimal project in plain Python:
+
 ```bash
 docker build -t mlops-toy-regression:cpu examples/toy-regression
 mlops validate examples/toy-regression
 mlops dataset add toy data/raw/toy_v1 --license CC0-1.0 --split train=train --split test=test
 mlops run examples/toy-regression train --dataset toy@v1
-mlops run examples/toy-regression evaluate --model toy-regression@candidate --dataset toy@v1
 mlops model promote toy-regression 1
 mlops serve start toy-regression
 ```
 
-`examples/toy-regression` is a minimal project in plain Python; `load.py` sends test traffic to its service. Anything a project writes to the run given in `MLFLOW_RUN_ID` (per-epoch metrics for example) shows up as live curves.
-
-`mlops project archive toy-regression` stops its services and hides it from the platform without deleting anything; `mlops project restore` brings it back. Datasets versions are archived the same way from the UI.
+The full example is `../compressed-detection`, drone detection in the compressed video domain.
 
 ## CLI
 
 | Command | Purpose |
 | --- | --- |
-| `mlops run <project> <entrypoint>` | Run an entrypoint with `--dataset name@vN`, `--model project.model@vN`, `--slot`, `--config`, `--profile`, `--variant`, `--set key=value` |
+| `mlops run <project> <entrypoint>` | Run an entrypoint with `--dataset name@vN`, `--model project.model@vN`, `--slot`, `--config`, `--profile`, `--set key=value` |
 | `mlops dataset add / list / show / diff / verify` | Dataset versions |
 | `mlops model list / import / promote / rollback / history / rename` | Model registry |
 | `mlops serve start / stop / status / logs` | Production services |
-| `mlops api`, `mlops worker` | Platform API and UI, job worker |
+| `mlops project archive / restore` | Hide a project without deleting anything |
 
-Dataset files are stored once by content hash in `store/`. By default they are hard-linked from the source folder, which makes the source files read-only; `--copy` keeps them editable at the cost of disk space. Files matching `dataset_ignore` in `configs/platform.yaml` are skipped.
+Platform settings are in `configs/platform.yaml` (overridden in Docker by `configs/platform.docker.yaml`), hardware profiles in `configs/hardware_profiles.yaml`. Docker-limited profiles approximate a target and their results are marked estimated.
 
-Each run is an MLflow run in the experiment named after the project: params (command, config values, profile), tags (image id, Git commit), metrics from the JSON outputs, artifacts (model, metrics, config, stdout, hardware). Platform settings are in `configs/platform.yaml`, hardware profiles in `configs/hardware_profiles.yaml`. Docker-limited profiles approximate a target and their results are marked estimated.
-
-## Tests
+## Development
 
 ```bash
 .venv/Scripts/python -m pip install -e ".[dev]"
 .venv/Scripts/python -m pytest
+cd ui && npm run dev
 ```
 
-On Windows, stop `mlops api` and `mlops worker` before reinstalling: pip cannot replace `mlops.exe` while it runs.
-
-## UI development
-
-```bash
-cd ui
-npm run dev
-```
-
-Serves the UI on http://localhost:3000 with `/api` proxied to `mlops api`.
+`npm run dev` serves the UI on http://localhost:3000 with `/api` proxied to the API.
