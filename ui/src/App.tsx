@@ -6,6 +6,7 @@ import ModelsPage from "./pages/Models";
 import ModelPage from "./pages/Model";
 import { ProductionList, ProductionService } from "./pages/Production";
 import { RunPage, RunsList } from "./pages/Runs";
+import { SweepPage } from "./pages/Sweep";
 import Upcoming from "./pages/Upcoming";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="models/:project" element={<ModelPage />} />
         <Route path="runs" element={<RunsList />} />
         <Route path="runs/:id" element={<RunPage />} />
+        <Route path="sweeps/:id" element={<SweepPage />} />
         <Route path="production" element={<ProductionList />} />
         <Route path="production/:project" element={<ProductionService />} />
         <Route path="*" element={<Upcoming title="Not found" />} />

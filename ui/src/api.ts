@@ -313,3 +313,17 @@ export const jobs = {
   cancel: (id: number) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),
   curves: (runId: string) => request<Record<string, [number, number][]>>(`/api/runs/${runId}/metrics`),
 };
+
+export type SweepPoint = { job: number; status: JobStatus; run_id: string | null; point: Record<string, unknown>; metrics: Record<string, number> };
+export type Sweep = {
+  id: string; model: string; entrypoint: string; params: string[]; created_at: string; points: SweepPoint[];
+  spec: { model?: string | null; config?: string | null; datasets?: string[]; profile?: string | null };
+};
+export type SweepSummary = { id: string; model: string; entrypoint: string; params: string[]; created_at: string; jobs: number; done: number };
+
+export const sweeps = {
+  create: (body: JobRequest & { grid: Record<string, unknown[]> }) =>
+    request<Sweep>("/api/sweeps", json(body)),
+  list: (model?: string) => request<SweepSummary[]>(`/api/sweeps${model ? `?model=${encodeURIComponent(model)}` : ""}`),
+  get: (id: string) => request<Sweep>(`/api/sweeps/${id}`),
+};

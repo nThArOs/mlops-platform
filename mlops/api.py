@@ -294,6 +294,29 @@ class JobSpec(BaseModel):
     note: str | None = None
 
 
+class SweepSpec(JobSpec):
+    grid: dict[str, list] = {}
+
+
+@app.post("/api/sweeps")
+def create_sweep(body: SweepSpec):
+    if body.profile:
+        load_profile(load_config(), body.profile)
+    spec = body.model_dump()
+    grid = spec.pop("grid")
+    return jobs.sweep(jobs.create_sweep(spec, grid))
+
+
+@app.get("/api/sweeps")
+def list_sweeps(model: str | None = None):
+    return jobs.sweeps(model)
+
+
+@app.get("/api/sweeps/{sweep_id}")
+def get_sweep(sweep_id: str):
+    return jobs.sweep(sweep_id)
+
+
 @app.post("/api/jobs")
 def create_job(body: JobSpec):
     if body.profile:

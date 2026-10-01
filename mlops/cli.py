@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slot", help="model of the project to train or evaluate, when it declares several")
     p.add_argument("--variant", help="label for the registered version, default: config file name")
     p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="value for a {KEY} placeholder")
+    p.add_argument("--no-record", action="store_true",
+                   help="log the run only, don't record it as the version's evaluation or benchmark")
     for name in ("split", "sample"):
         p.add_argument(f"--{name}")
 
@@ -308,7 +310,7 @@ def main(argv=None) -> int:
 
         values = {"model": args.model, "split": args.split, "sample": args.sample, **parse_splits(args.set)}
         return run_entrypoint(project, args.entrypoint, args.profile, args.config, values, args.dataset, args.slot,
-                              args.variant)
+                              args.variant, record=not args.no_record)
     except ContractError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

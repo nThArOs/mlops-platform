@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { statusBadge as jobBadge } from "./Runs";
 import { ArrowLeft, ExternalLink, Play, RotateCcw } from "lucide-react";
-import { jobs, models, type ModelEvent, type ModelSummary, type PromotionCheck } from "../api";
+import { jobs, models, sweeps, type ModelEvent, type ModelSummary, type PromotionCheck } from "../api";
 import Benchmarks from "../components/Benchmarks";
 import VersionDetails from "../components/VersionDetails";
 import InfoTip from "../components/InfoTip";
 import ProgressBar from "../components/Progress";
 import TrainDialog from "../components/TrainDialog";
+import { SweepDialog } from "./Sweep";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
 import { date } from "../lib/format";
 import { lookup } from "../lib/glossary";
@@ -232,6 +233,8 @@ export default function ModelPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [cmVersion, setCmVersion] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
+  const sweepList = useFetch(() => sweeps.list(project), [project]);
 
   const meta: ModelSummary | undefined = summary.data?.find((m) => m.name === project);
   const versions = detail.data?.versions ?? [];
@@ -301,6 +304,7 @@ export default function ModelPage() {
         <div style={{ display: "flex", gap: 8 }}>
           {detail.data!.production && <Link className="btn" to={`/production/${project}`}>Production</Link>}
           {canRollback && <button className="btn" onClick={() => setRollingBack(true)}><RotateCcw size={14} /> Roll back</button>}
+          {meta && <button className="btn" onClick={() => setSweeping(true)}>Sweep</button>}
           {meta && <button className="btn primary" onClick={() => setTraining(true)}><Play size={13} /> Train</button>}
         </div>
       </div>
@@ -424,6 +428,25 @@ export default function ModelPage() {
         <PromoteDialog project={project} version={promoting}
           dataset={dataset && versions.find((v) => v.version === promoting)?.evaluations[dataset] ? dataset : null}
           onClose={() => setPromoting(null)} onDone={done} />
+      )}
+      {sweeping && meta && <SweepDialog meta={meta} onClose={() => setSweeping(false)} />}
+      {(sweepList.data ?? []).length > 0 && (
+        <div className="section">
+          <div className="section-head"><h2 className="section-title">Sweeps</h2></div>
+          <table className="table">
+            <tbody>
+              {sweepList.data!.slice(0, 5).map((s) => (
+                <tr key={s.id}>
+                  <td><Link className="mono" to={`/sweeps/${s.id}`}>{s.id}</Link></td>
+                  <td>{s.entrypoint}</td>
+                  <td className="mono muted">{s.params.join(", ")}</td>
+                  <td className="muted">{s.done}/{s.jobs} done</td>
+                  <td className="muted">{date(s.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {training && meta && <TrainDialog project={meta.project} slot={meta.slot} benchProfiles={Object.keys(meta.constraints)}
         constraints={meta.constraints}

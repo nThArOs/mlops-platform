@@ -146,7 +146,88 @@ def _command(job: dict) -> list[str]:
             cmd += [f"--{flag}", str(spec[flag])]
     for key, value in (spec.get("values") or {}).items():
         cmd += ["--set", f"{key}={value}"]
+    if spec.get("sweep") and job["entrypoint"] != "train":
+        cmd.append("--no-record")
     return cmd
+
+
+MAX_SWEEP = 60
+
+
+def _unflatten(flat: dict) -> dict:
+    out: dict = {}
+    for key, value in flat.items():
+        node = out
+        *parents, last = key.split(".")
+        for p in parents:
+            node = node.setdefault(p, {})
+        node[last] = value
+    return out
+
+
+def create_sweep(spec: dict, grid: dict[str, list]) -> str:
+    """One job per combination of the grid values, applied as config overrides on top of spec["params"]."""
+    import itertools
+    import uuid
+
+    names = [k for k, v in grid.items() if v]
+    points = list(itertools.product(*(grid[k] for k in names)))
+    if not points or len(points) > MAX_SWEEP:
+        raise ContractError(f"a sweep needs 1 to {MAX_SWEEP} combinations, this grid has {len(points)}")
+    if not spec.get("config"):
+        ep = load_project(project_root(spec["project"])).entrypoints.get(spec.get("entrypoint", "train"))
+        spec = {**spec, "config": ep.config if ep else None}
+    if not spec.get("config"):
+        raise ContractError(f"{spec.get('entrypoint')} has no config to sweep")
+    sweep_id = uuid.uuid4().hex[:8]
+    for values in points:
+        point = dict(zip(names, values))
+        create({**spec, "params": merge(spec.get("params") or {}, _unflatten(point)),
+                "sweep": sweep_id, "sweep_point": point})
+    return sweep_id
+
+
+def _sweep_jobs(sweep_id: str | None = None, limit: int = 2000) -> list[dict]:
+    with db.engine().connect() as conn:
+        rows = conn.execute(sa.select(db.jobs).order_by(db.jobs.c.id.desc()).limit(limit)).mappings().all()
+    return [dict(r) for r in rows if (r["spec"] or {}).get("sweep") and
+            (sweep_id is None or r["spec"]["sweep"] == sweep_id)]
+
+
+def sweep(sweep_id: str) -> dict:
+    from .models import client
+
+    jobs = sorted(_sweep_jobs(sweep_id), key=lambda j: j["id"])
+    if not jobs:
+        raise ContractError(f"unknown sweep {sweep_id}")
+    c = client()
+    points = []
+    for j in jobs:
+        metrics = {}
+        if j["run_id"]:
+            try:
+                metrics = c.get_run(j["run_id"]).data.metrics
+            except Exception:
+                pass
+        points.append({"job": j["id"], "status": j["status"], "run_id": j["run_id"],
+                       "point": j["spec"]["sweep_point"], "metrics": metrics})
+    first = jobs[0]["spec"]
+    return {"id": sweep_id, "model": jobs[0]["model"], "entrypoint": jobs[0]["entrypoint"],
+            "spec": {k: first.get(k) for k in ("model", "config", "datasets", "profile")},
+            "params": list(first["sweep_point"]), "created_at": jobs[0]["created_at"], "points": points}
+
+
+def sweeps(model: str | None = None) -> list[dict]:
+    seen: dict[str, dict] = {}
+    for j in _sweep_jobs():
+        if model and j["model"] != model:
+            continue
+        s = seen.setdefault(j["spec"]["sweep"], {"id": j["spec"]["sweep"], "model": j["model"],
+                                                 "entrypoint": j["entrypoint"], "params": list(j["spec"]["sweep_point"]),
+                                                 "created_at": j["created_at"], "jobs": 0, "done": 0})
+        s["jobs"] += 1
+        s["done"] += j["status"] in ("finished", "failed", "cancelled")
+    return list(seen.values())
 
 
 def _parse(text: str) -> dict:
