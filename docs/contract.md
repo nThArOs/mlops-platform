@@ -4,40 +4,45 @@ A project plugs into the platform with a `project.yaml` at its root. The platfor
 
 ## Example
 
+The `project.yaml` of a drone detection project working on compressed video, with the planned `export` and `constraints` sections:
+
 ```yaml
 name: compressed-detection
 image: compressed-detection-track:cpu
 task: detection-tracking
+shm_size: 2g
 
 datasets:
-  - name: dut_anti_uav
+  - name: dut_anti_uav_mot
     mount: data/mot/dut_anti_uav
+  - name: dut_anti_uav_yolo
+    mount: data/yolo/dut_anti_uav
 
 entrypoints:
   train:
-    command: python scripts/train_yolo.py --config {config}
+    command: python scripts/train_yolo.py dut_anti_uav residual --config {config} --tag platform
     config: configs/train.yaml
-    outputs: { model: models/*.pt, metrics: results/detect_*.json }
+    outputs: { model: models/dut_anti_uav_residual_platform.pt, metrics: results/detect_dut_anti_uav_residual_platform.json }
   evaluate:
-    command: python scripts/eval_mot.py --model {model} --data {dataset_path}
-    outputs: { metrics: results/metrics_*.json }
-  benchmark:
-    command: python scripts/benchmark.py --model {model} --input {sample}
-    outputs: { metrics: results/bench_*.json }
+    command: >-
+      python scripts/track.py platform dut_anti_uav --input residual --model {model} --classes drone
+      --sequences data/yolo/dut_anti_uav/splits.json
+      && python scripts/eval_mot.py platform dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
+    outputs: { metrics: results/metrics_dut_anti_uav_test_platform_heldout.json }
   serve:
-    command: python scripts/serve.py --model {model}
+    command: python scripts/serve.py --model {model} --port {port} --input residual
     port: 8000
-
-export:
-  formats: [onnx, onnx-int8, openvino]
 
 metrics:
   primary: mean.HOTA
   higher_is_better: true
-  watch: [HOTA, MOTA, IDF1, fps]
+  watch: [mean.HOTA, mean.MOTA, mean.IDF1, fps]
+
+export:
+  formats: [onnx, onnx-int8, openvino]
 
 constraints:
-  edge-small: { latency_p95_ms: 100, ram_mb: 1024, model_mb: 20 }
+  edge-small: { latency_p95_ms: 500, ram_mb: 2048, model_mb: 20 }
 ```
 
 ## Fields

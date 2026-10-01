@@ -165,8 +165,9 @@ def model_command(args) -> int:
 
     if args.action == "list":
         rows = []
+        primary = models._contract(args.project)["metrics"]["primary"]
         for v in models.list_versions(args.project):
-            evals = "; ".join(f"{ds}: " + ", ".join(f"{k}={m[k]:g}" for k in list(m)[:3])
+            evals = "; ".join(f"{ds}: {primary}={m[primary]:g}" if primary in m else f"{ds}: no {primary}"
                               for ds, m in v["evaluations"].items())
             rows.append({"version": f"v{v['version']}", "status": v["status"],
                          "trained_on": ", ".join(v["trained_on"]), "evaluations": evals})
