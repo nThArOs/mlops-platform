@@ -380,3 +380,8 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 
 td.num.good { background: var(--success-bg); color: var(--success); }
 td.num.danger { background: var(--danger-bg); color: var(--danger); }
+.cm-layout { align-items: stretch; }
+.cm-layout > .cm { flex: 1 1 0; min-width: 360px; }
+.cm-layout > .derived { flex: 1 1 0; }
+.cm td { height: 120px; font-size: 18px; }
+.cm .cm-tag { font-size: 12px; margin-bottom: 6px; }
