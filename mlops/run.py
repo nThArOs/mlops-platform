@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from . import cpus, datasets, db, models
+from .paths import to_host
 from .config import ROOT, load_config
 from .project import ContractError, Project, split_key
 
@@ -103,7 +104,7 @@ def host_hardware(profile_name: str, profile: dict) -> dict:
 
 def save_project(project: Project) -> None:
     stmt = pg_insert(db.projects).values(
-        name=project.name, root=str(project.root), contract=project.raw)
+        name=project.name, root=to_host(project.root), contract=project.raw)
     stmt = stmt.on_conflict_do_update(index_elements=["name"], set_={
         "root": stmt.excluded.root, "contract": stmt.excluded.contract, "updated_at": func.now()})
     with db.engine().begin() as conn:
@@ -179,8 +180,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         run_dir.mkdir(parents=True, exist_ok=True)
 
         volumes = [
-            "-v", f"{project.root}:{project.workdir}",
-            "-v", f"{run_dir}:{CONTAINER_RUN_DIR}",
+            "-v", f"{to_host(project.root)}:{project.workdir}",
+            "-v", f"{to_host(run_dir)}:{CONTAINER_RUN_DIR}",
         ]
         tags = {"image_id": img_id, "estimated": str(not hardware["measured"]), "mlops.model": key,
                 **git_state(project.root)}
@@ -188,14 +189,14 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             name, version = registry_model
             model_path = models.download(name, version, run_dir.parent / f"{run_id}_model")
             target = CONTAINER_MODEL_DIR + (f"/{model_path.name}" if model_path.is_file() else "")
-            volumes += ["-v", f"{model_path.parent if model_path.is_file() else model_path}:{CONTAINER_MODEL_DIR}:ro"]
+            volumes += ["-v", f"{to_host(model_path.parent if model_path.is_file() else model_path)}:{CONTAINER_MODEL_DIR}:ro"]
             command = command.replace(CONTAINER_MODEL_DIR, target, 1)
             tags.update({"model.name": name, "model.version": str(version)})
         for version, mount in mounted:
-            volumes += ["-v", f"{datasets.checkout(version)}:{project.workdir}/{mount}:ro"]
+            volumes += ["-v", f"{to_host(datasets.checkout(version))}:{project.workdir}/{mount}:ro"]
             tags[f"dataset.{version['name']}"] = f"v{version['version']}"
         if external_config:
-            volumes += ["-v", f"{external_config.parent}:{CONTAINER_CONFIG_DIR}:ro"]
+            volumes += ["-v", f"{to_host(external_config.parent)}:{CONTAINER_CONFIG_DIR}:ro"]
 
         params = {
             "entrypoint": entrypoint,
@@ -315,5 +316,5 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
                                  all_metrics, confusion, extras or None)
         print(f"evaluation of {registry_model[0]}@v{registry_model[1]} recorded")
     print(f"{status.lower()} in {duration:.1f}s, exit code {returncode}")
-    print(f"{cfg['tracking_uri']}/#/experiments/{run.info.experiment_id}/runs/{run_id}")
+    print(f"{cfg['public_tracking_uri']}/#/experiments/{run.info.experiment_id}/runs/{run_id}")
     return returncode

@@ -13,6 +13,7 @@ import sqlalchemy as sa
 
 from . import cpus, db, models
 from .config import load_config, resolve
+from .paths import to_host, to_local
 from .project import ContractError, load_project, split_key
 from .run import CONTAINER_MODEL_DIR, image_id, load_profile, render_command
 
@@ -21,14 +22,24 @@ LABEL = "mlops.project"
 
 def free_port(wanted: int = 0) -> int | None:
     # an explicit host port survives container restarts, an ephemeral one changes and loses Prometheus
+    import random
     import socket
 
-    with socket.socket() as s:
-        try:
-            s.bind(("127.0.0.1", wanted))
-        except OSError:
-            return None
-        return s.getsockname()[1]
+    host = load_config()["service_host"]
+    if host == "127.0.0.1":
+        with socket.socket() as s:
+            try:
+                s.bind((host, wanted))
+            except OSError:
+                return None
+            return s.getsockname()[1]
+    # in a container the host's ports can't be bound, only probed
+    for port in [wanted] if wanted else random.sample(range(20000, 60000), 20):
+        with socket.socket() as s:
+            s.settimeout(0.3)
+            if s.connect_ex((host, port)) != 0:
+                return port
+    return None
 
 
 def host_port(service_dir: Path, current: int | None) -> int:
@@ -58,14 +69,14 @@ def project_root(key: str) -> Path:
         root = conn.execute(sa.select(db.projects.c.root).where(db.projects.c.name == project)).scalar()
     if root is None:
         raise ContractError(f"unknown project: {project}")
-    return Path(root)
+    return to_local(root)
 
 
 def _healthy(port: int | None) -> bool:
     if not port:
         return False
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=1) as r:
+        with urllib.request.urlopen(f"http://{load_config()['service_host']}:{port}/metrics", timeout=1) as r:
             return r.status == 200
     except OSError:
         return False
@@ -94,7 +105,7 @@ def status(project: str) -> dict:
 def frame(port: int, view: str, width: int) -> bytes | None:
     query = urllib.parse.urlencode({"view": view, "width": width})
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/frame.jpg?{query}", timeout=3) as r:
+        with urllib.request.urlopen(f"http://{load_config()['service_host']}:{port}/frame.jpg?{query}", timeout=3) as r:
             return r.read()
     except urllib.error.HTTPError as e:
         if e.code == 503:
@@ -185,7 +196,7 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
             "--label", f"{LABEL}={project}", "--label", f"mlops.version={version}",
             "--label", f"mlops.profile={profile_name}",
             "-p", f"127.0.0.1:{port}:{ep.port}",
-            "-v", f"{spec.root}:{spec.workdir}:ro", "-v", f"{mount}:{CONTAINER_MODEL_DIR}:ro",
+            "-v", f"{to_host(spec.root)}:{spec.workdir}:ro", "-v", f"{to_host(mount)}:{CONTAINER_MODEL_DIR}:ro",
             "-w", spec.workdir, "-e", f"MLOPS_PROFILE={profile_name}"]
     if profile.get("cpus"):
         args += ["--cpus", str(profile["cpus"])]

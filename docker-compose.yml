@@ -44,6 +44,39 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
 
+  api:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    image: mlops-platform:cpu
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes: &platform
+      - ./configs:/platform/configs:ro
+      - ./store:/platform/store
+      - ./runs:/platform/runs
+      - ./prometheus/targets:/platform/prometheus/targets
+      # folder holding the projects, so their project.yaml and code can be read and mounted
+      - ${MLOPS_PROJECTS_DIR:-..}:/projects
+      # the platform starts training and serving containers on the host's Docker
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts: &hosts
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on: &deps
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+
+  worker:
+    image: mlops-platform:cpu
+    command: ["mlops", "worker"]
+    volumes: *platform
+    extra_hosts: *hosts
+    restart: unless-stopped
+    depends_on: *deps
+
 volumes:
   postgres:
   mlartifacts:

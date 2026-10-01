@@ -12,6 +12,7 @@ import yaml
 
 from . import datasets, db, models
 from .config import load_config, resolve
+from .paths import to_local
 from .project import ContractError, load_project, split_key
 
 ACTIVE = ("queued", "running", "cancelling")
@@ -32,7 +33,7 @@ def project_root(project: str) -> Path:
         root = conn.execute(sa.select(db.projects.c.root).where(db.projects.c.name == project)).scalar()
     if root is None:
         raise ContractError(f"unknown project: {project}")
-    return Path(root)
+    return to_local(root)
 
 
 def merge(base: dict, overrides: dict) -> dict:

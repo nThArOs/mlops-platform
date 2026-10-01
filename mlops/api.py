@@ -38,7 +38,7 @@ def health():
 @app.get("/api/info")
 def info():
     cfg = load_config()
-    return {"mlflow_url": cfg["tracking_uri"], "prometheus_url": cfg["prometheus_url"]}
+    return {"mlflow_url": cfg["public_tracking_uri"], "prometheus_url": cfg["public_prometheus_url"]}
 
 
 class DatasetFolder(BaseModel):

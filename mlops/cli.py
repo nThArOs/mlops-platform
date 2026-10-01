@@ -229,6 +229,9 @@ def project_command(args) -> int:
         root = conn.execute(sa.select(db.projects.c.root).where(db.projects.c.name == args.name)).scalar()
     if root is None:
         raise ContractError(f"unknown project {args.name}")
+    from .paths import to_local
+
+    root = to_local(root)
     archive = args.action == "archive"
     if archive:
         spec = load_project(root)

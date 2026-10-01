@@ -1,0 +1,7 @@
+# Addresses seen from the api and worker containers of docker-compose.yml, on top of platform.yaml.
+database_url: postgresql+pg8000://mlops:mlops@postgres:5432/platform
+tracking_uri: http://mlflow:5000
+prometheus_url: http://prometheus:9090
+service_host: host.docker.internal   # production services publish their port on the host
+public_tracking_uri: http://127.0.0.1:5000     # links shown in the browser
+public_prometheus_url: http://127.0.0.1:9090
