@@ -11,13 +11,17 @@ Model-agnostic MLOps platform for teams that train and ship their own models, do
 
 ## Screenshots
 
-Production service of a drone detector on CPU, with live metrics, the last offline evaluation and the frame seen by the model:
+Production service of a drone detector on a 2-CPU profile: live metrics, the last offline evaluation, drift without labels and the frame seen by the model.
 
 ![Production](docs/screenshots/production.png)
 
-| Model versions, confusion matrix and computed scores | Models grouped by project |
+| Model versions with variants, version details, edge benchmarks | Training run with live curves and automatic promotion |
 | --- | --- |
-| ![Model](docs/screenshots/model.png) | ![Models](docs/screenshots/models.png) |
+| ![Model](docs/screenshots/model.png) | ![Run](docs/screenshots/run.png) |
+
+| Runs | Models grouped by project |
+| --- | --- |
+| ![Runs](docs/screenshots/runs.png) | ![Models](docs/screenshots/models.png) |
 
 | Dataset version, splits and lineage | Datasets |
 | --- | --- |

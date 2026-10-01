@@ -15,6 +15,7 @@ function nice(key: string): string {
 }
 
 function number(v: number): string {
+  if (Number.isInteger(v)) return v.toLocaleString("en-US");
   return Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
 
@@ -71,7 +72,10 @@ export default function VersionDetails({ version, dataset, meta }: { version: Mo
             <LineChart key={name} title={name === "threshold" ? "Precision, recall and F1 by confidence threshold" : name}
               info={name === "threshold" ? "threshold_curve" : undefined} format={pct} xFormat={(x) => x.toFixed(2)}
               series={Object.keys(c).filter((s) => s !== "x").slice(0, 3).map((s, i) => ({
-                name: s, color: `var(--series-${i + 1})`, points: c.x.map((x, j) => [x, c[s][j]] as [number, number]),
+                name: s, color: `var(--series-${i + 1})`,
+                // precision is undefined once no prediction passes the threshold
+                points: c.x.map((x, j) => [x, c[s][j]] as [number, number])
+                  .filter(([, y], j) => y !== null && !(s === "precision" && y === 0 && c.recall?.[j] === 0)),
               }))} />
           ))}
           {bars.map(([name, values]) => <SliceBars key={name} name={name} values={values} counts={counts} edges={edges} />)}

@@ -335,4 +335,5 @@ if UI_DIST.is_dir():
         target = (UI_DIST / path).resolve()
         if path and target.is_file() and target.is_relative_to(UI_DIST):
             return FileResponse(target)
-        return FileResponse(UI_DIST / "index.html")
+        # hashed assets can be cached forever, the page that points to them must not
+        return FileResponse(UI_DIST / "index.html", headers={"Cache-Control": "no-cache"})

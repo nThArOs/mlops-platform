@@ -156,7 +156,11 @@ function RecentRuns({ model }: { model: string }) {
             <tr key={j.id} className="link" onClick={() => navigate(`/runs/${j.id}`)}>
               <td className="mono muted" style={{ width: 48 }}>#{j.id}</td>
               <td><Badge>{j.entrypoint}</Badge></td>
-              <td className="mono muted">{j.entrypoint === "evaluate" ? j.spec.model : j.spec.variant ?? j.spec.config}</td>
+              <td className="mono muted">
+                {j.entrypoint === "train" ? j.spec.variant ?? j.spec.config : j.spec.model}
+                {j.entrypoint === "benchmark" && j.spec.profile && <span className="faint"> on {j.spec.profile}</span>}
+                {j.entrypoint === "export" && j.spec.variant && <span className="faint"> as {j.spec.variant}</span>}
+              </td>
               <td>{jobBadge(j.status)}</td>
               <td className="muted">{date(j.created_at)}</td>
             </tr>
