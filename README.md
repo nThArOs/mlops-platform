@@ -80,6 +80,13 @@ Dataset files are stored once by content hash in `store/`. By default they are h
 
 Each run is an MLflow run in the experiment named after the project: params (command, config values, profile), tags (image id, Git commit), metrics from the JSON outputs, artifacts (model, metrics, config, stdout, hardware). Platform settings are in `configs/platform.yaml`, hardware profiles in `configs/hardware_profiles.yaml`. Docker-limited profiles approximate a target and their results are marked estimated.
 
+## Tests
+
+```bash
+.venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/python -m pytest
+```
+
 ## UI development
 
 ```bash
