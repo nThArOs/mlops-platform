@@ -122,6 +122,7 @@ export type ModelSummary = {
   higher_is_better: boolean;
   watch: string[];
   descriptions: Record<string, string>;
+  constraints: Record<string, Record<string, number>>;
   versions: number;
   production: number | null;
   updated_at: string;
@@ -138,6 +139,7 @@ export type ModelVersion = {
   evaluations: Record<string, Record<string, number>>;
   confusion: Record<string, { labels: string[]; matrix: (number | null)[][]; rows?: string; columns?: string }>;
   extras: Record<string, Extras>;
+  benchmarks: Record<string, Record<string, number | boolean | string>>;
 };
 
 export type Extras = {

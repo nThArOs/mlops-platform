@@ -71,6 +71,18 @@ model_evaluations = sa.Table(
     _created(),
 )
 
+model_benchmarks = sa.Table(
+    "model_benchmarks", metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("project", sa.String(200), nullable=False),
+    sa.Column("model_version", sa.Integer, nullable=False),
+    sa.Column("run_id", sa.String(32), nullable=False),
+    sa.Column("profile", sa.String(100), nullable=False),
+    sa.Column("measured", sa.Boolean, nullable=False, server_default=sa.false()),
+    sa.Column("metrics", sa.JSON, nullable=False),
+    _created(),
+)
+
 jobs = sa.Table(
     "jobs", metadata,
     sa.Column("id", sa.Integer, primary_key=True),

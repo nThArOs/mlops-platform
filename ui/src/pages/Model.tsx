@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { statusBadge as jobBadge } from "./Runs";
 import { ArrowLeft, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { jobs, models, type ModelEvent, type ModelSummary, type PromotionCheck } from "../api";
+import Benchmarks from "../components/Benchmarks";
 import VersionDetails from "../components/VersionDetails";
 import InfoTip from "../components/InfoTip";
 import TrainDialog from "../components/TrainDialog";
@@ -342,6 +343,8 @@ export default function ModelPage() {
           {meta && <VersionDetails version={cmShown} dataset={dataset} meta={meta} />}
         </div>
       )}
+
+      {meta && <Benchmarks meta={meta} versions={versions} dataset={dataset} />}
 
       <RecentRuns model={project} />
 

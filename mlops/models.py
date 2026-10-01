@@ -70,6 +70,51 @@ def record_evaluation(project: str, version: int, run_id: str, dataset_version_i
                 confusion=confusion, extras=extras))
 
 
+CONSTRAINTS = {
+    "latency_p50_ms": ("latency_ms.p50", "max"),
+    "latency_p95_ms": ("latency_ms.p95", "max"),
+    "latency_p99_ms": ("latency_ms.p99", "max"),
+    "end_to_end_p95_ms": ("end_to_end_ms.p95", "max"),
+    "cold_start_ms": ("cold_start_ms", "max"),
+    "ram_mb": ("ram_peak_mb", "max"),
+    "model_mb": ("model_mb", "max"),
+    "fps": ("fps", "min"),
+}
+
+
+def record_benchmark(project: str, version: int, run_id: str, profile: str, metrics: dict, measured: bool) -> None:
+    with db.engine().begin() as conn:
+        conn.execute(sa.insert(db.model_benchmarks).values(
+            project=project, model_version=version, run_id=run_id, profile=profile, metrics=metrics, measured=measured))
+
+
+def benchmarks(project: str, version: int) -> dict[str, dict]:
+    b = db.model_benchmarks
+    query = sa.select(b).where(b.c.project == project, b.c.model_version == version).order_by(b.c.id)
+    with db.engine().connect() as conn:
+        return {r["profile"]: {**r["metrics"], "_measured": r["measured"], "_run_id": r["run_id"],
+                               "_at": r["created_at"].isoformat()} for r in conn.execute(query).mappings()}
+
+
+def constraint_checks(contract: dict, project: str, version: int) -> list[dict]:
+    out = []
+    for profile, limits in (contract.get("constraints") or {}).items():
+        bench = benchmarks(project, version).get(profile)
+        for name, limit in limits.items():
+            key, kind = CONSTRAINTS.get(name, (name, "max"))
+            label = f"{profile}: {key}"
+            if bench is None or key not in bench:
+                out.append({"metric": label, "new": None, "current": limit, "ok": False,
+                            "rule": f"not benchmarked on {profile}"})
+                continue
+            value = bench[key]
+            ok = value <= limit if kind == "max" else value >= limit
+            out.append({"metric": label, "new": value, "current": limit, "ok": ok,
+                        "rule": f"must be {'at most' if kind == 'max' else 'at least'} {limit:g} on {profile}"
+                                + (" (estimated)" if not bench["_measured"] else "")})
+    return out
+
+
 def confusion_matrices(project: str, version: int) -> dict[int, dict]:
     return _latest_column(project, version, "confusion")
 
@@ -130,6 +175,7 @@ def list_versions(project: str) -> list[dict]:
             "evaluations": {ref_of(dv): m for dv, m in evaluations(project, version).items()},
             "confusion": {ref_of(dv): cm for dv, cm in confusion_matrices(project, version).items()},
             "extras": {ref_of(dv): x for dv, x in evaluation_extras(project, version).items()},
+            "benchmarks": benchmarks(project, version),
         })
     return out
 
@@ -157,8 +203,12 @@ def promotion_checks(project: str, version: int, dataset_version_id: int | None 
     if not new:
         raise ContractError(f"v{version} has no evaluation, run evaluate with --model {project}@v{version}")
     current = production_version(project)
+    limits = constraint_checks(contract, project, version)
     if current is None:
-        return {"allowed": True, "detail": "first production version, no comparison", "checks": []}
+        failed = [c for c in limits if not c["ok"]]
+        return {"allowed": not failed, "checks": limits,
+                "detail": "first production version" if not failed else "refused: " + "; ".join(
+                    f"{c['metric']} {c['rule']}" for c in failed)}
     cur = evaluations(project, current)
     common = set(new) & set(cur)
     if dataset_version_id is not None:
@@ -192,11 +242,13 @@ def promotion_checks(project: str, version: int, dataset_version_id: int | None 
         ok = x >= y - margin if direction == "higher" else x <= y + margin
         checks.append({"metric": key, "new": x, "current": y, "ok": ok,
                        "rule": f"must not {'drop' if direction == 'higher' else 'rise'} more than {tolerance:.0%}"})
+    checks += limits
     allowed = all(c["ok"] for c in checks)
     failed = [c for c in checks if not c["ok"]]
     head = f"{primary} {a:g} vs {b:g} (v{current}) on {ref_of(dv)}"
     detail = head if allowed else f"refused on {ref_of(dv)} against v{current}: " + "; ".join(
-        f"{c['metric']} {c['new']:g} vs {c['current']:g}, {c['rule']}" for c in failed)
+        f"{c['metric']} {c['rule']}" if c["new"] is None else f"{c['metric']} {c['new']:g} vs {c['current']:g}, {c['rule']}"
+        for c in failed)
     return {"allowed": allowed, "detail": detail, "checks": checks, "dataset": ref_of(dv), "current": current}
 
 
@@ -287,6 +339,7 @@ def list_projects() -> list[dict]:
                 "higher_is_better": contract["metrics"]["higher_is_better"],
                 "watch": contract["metrics"].get("watch", []),
                 "descriptions": contract["metrics"].get("descriptions", {}),
+                "constraints": contract.get("constraints") or {},
                 "versions": len(c.search_model_versions(f"name='{key}'")) if model else 0,
                 "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
                 "updated_at": row["updated_at"],

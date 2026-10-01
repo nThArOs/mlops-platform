@@ -297,6 +297,10 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
     if status == "FINISHED" and outputs.get("model"):
         version = models.register(key, run_id, variant or (config_host.stem if config_host else None))
         print(f"registered {key}@v{version} (candidate)")
+    if status == "FINISHED" and entrypoint == "benchmark" and registry_model and all_metrics:
+        models.record_benchmark(registry_model[0], registry_model[1], run_id, profile_name, all_metrics,
+                                bool(hardware["measured"]))
+        print(f"benchmark of {registry_model[0]}@v{registry_model[1]} on {profile_name} recorded")
     if status == "FINISHED" and entrypoint == "evaluate" and registry_model and mounted and all_metrics:
         models.record_evaluation(registry_model[0], registry_model[1], run_id, [v["id"] for v, _ in mounted],
                                  all_metrics, confusion, extras or None)
