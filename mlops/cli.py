@@ -173,7 +173,7 @@ def _follow(project: str) -> None:
 
     st = deploy.follow_production(project)
     if st:
-        print(f"service redeployed with v{st['version']}")
+        print(f"service set to v{st['desired']['version']}, the worker redeploys it")
 
 
 def model_command(args) -> int:
@@ -238,6 +238,7 @@ def project_command(args) -> int:
         for slot in spec.models or [None]:
             if deploy.status(spec.model_key(slot)).get("running"):
                 deploy.stop(spec.model_key(slot))
+                deploy.reconcile(spec.model_key(slot))
                 print(f"{spec.model_key(slot)} stopped")
     with db.engine().begin() as conn:
         conn.execute(sa.update(db.projects).where(db.projects.c.name == args.name).values(archived=archive))
@@ -249,10 +250,14 @@ def serve_command(args) -> int:
     from . import deploy
 
     if args.action == "start":
-        st = deploy.start(args.project, args.version, args.profile)
+        deploy.start(args.project, args.version, args.profile)
+        for action in deploy.reconcile(args.project):
+            print(action)
+        st = deploy.status(args.project)
         print(f"{args.project}@v{st['version']} serving on http://127.0.0.1:{st['port']}")
     elif args.action == "stop":
         deploy.stop(args.project)
+        deploy.reconcile(args.project)
         print(f"{args.project} stopped")
     elif args.action == "status":
         st = deploy.status(args.project)

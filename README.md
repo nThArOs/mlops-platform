@@ -41,7 +41,7 @@ docker compose up -d --build
 | Prometheus | http://localhost:9090 |
 | PostgreSQL | localhost:5432 (`platform`, `mlflow`) |
 
-Everything runs in Docker: PostgreSQL, MLflow, Prometheus, the API and the worker. The API and the worker start training and serving containers through the Docker socket. Projects are read from `MLOPS_PROJECTS_DIR` (default: the folder next to this repository), mounted at `/projects`; the platform translates paths to the host's when it mounts them into project containers. The worker is a separate container, so restarting the API never stops a running job. Credentials default to `mlops` / `mlops`, override them in `.env`. Services listen on localhost only.
+Everything runs in Docker: PostgreSQL, MLflow, Prometheus, the API and the worker. The API only records intent (jobs to run, the version each service should serve) and reads Docker through a read-only proxy. The worker is the only component that drives Docker: it claims jobs from the queue, and every 5 s it reconciles production services with their desired state, so a service that dies or drifts is put back. Jobs left by a lost worker are failed and their containers removed after 90 s without heartbeat. Projects are read from `MLOPS_PROJECTS_DIR` (default: the folder next to this repository), mounted at `/projects`; the platform translates paths to the host's when it mounts them into project containers. The worker is a separate container, so restarting the API never stops a running job. Credentials default to `mlops` / `mlops`, override them in `.env`. Services listen on localhost only.
 
 The CLI runs on the host against the same services:
 

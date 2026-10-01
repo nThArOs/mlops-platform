@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from . import cpus, db, models
 from .config import load_config, resolve
@@ -83,9 +84,11 @@ def _healthy(port: int | None) -> bool:
 
 
 def status(project: str) -> dict:
+    want = desired(project)
+    wanted = {"desired": {k: want[k] for k in ("version", "profile", "state", "error")}} if want else {}
     r = docker("inspect", container_name(project), check=False)
     if r.returncode:
-        return {"project": project, "running": False}
+        return {"project": project, "running": False, **wanted}
     info = json.loads(r.stdout)[0]
     labels = info["Config"]["Labels"]
     port = next((int(b[0]["HostPort"]) for b in (info["NetworkSettings"]["Ports"] or {}).values() if b), None)
@@ -99,6 +102,7 @@ def status(project: str) -> dict:
         "started_at": info["State"]["StartedAt"],
         "port": port,
         "healthy": running and _healthy(port),
+        **wanted,
     }
 
 
@@ -162,8 +166,7 @@ def _event(project: str, action: str, version: int, previous: int | None = None,
             project=project, action=action, from_version=previous, to_version=version, reason=reason))
 
 
-def start(project: str, version: int | None = None, profile_name: str | None = None) -> dict:
-    cfg = load_config()
+def _serve_spec(project: str):
     spec = load_project(project_root(project))
     _, slot = split_key(project)
     if spec.model_key(slot) != project:
@@ -171,10 +174,13 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
     ep = spec.entrypoints.get("serve")
     if ep is None or not ep.port:
         raise ContractError(f"{project} has no serve entrypoint with a port")
-    version = version or models.production_version(project)
-    if version is None:
-        raise ContractError(f"{project} has no production version")
-    profile_name = profile_name or cfg["default_profile"]
+    return spec, slot, ep
+
+
+def _run_service(project: str, version: int, profile_name: str) -> None:
+    """Replace the service container with one running this version; only the reconcile loop calls it."""
+    cfg = load_config()
+    spec, slot, ep = _serve_spec(project)
     profile = load_profile(cfg, profile_name)
     image = spec.image_for(slot)
     image_id(image)
@@ -207,26 +213,96 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
     args += ["--entrypoint", "sh", image, "-c", command]
     docker(*args)
     write_targets()
+
+
+def desired(project: str) -> dict | None:
+    with db.engine().connect() as conn:
+        row = conn.execute(sa.select(db.deployments).where(db.deployments.c.project == project)).mappings().first()
+    return dict(row) if row else None
+
+
+def _want(project: str, **values) -> None:
+    d = db.deployments
+    stmt = pg_insert(d).values(project=project, **values)
+    stmt = stmt.on_conflict_do_update(index_elements=["project"],
+                                      set_={**values, "error": None, "updated_at": sa.func.now()})
+    with db.engine().begin() as conn:
+        conn.execute(stmt)
+
+
+def start(project: str, version: int | None = None, profile_name: str | None = None) -> dict:
+    """Ask for this version to be served; the worker's reconcile loop starts or replaces the container."""
+    _serve_spec(project)
+    version = version or models.production_version(project)
+    if version is None:
+        raise ContractError(f"{project} has no production version")
+    previous = desired(project) or {}
+    profile_name = profile_name or previous.get("profile") or load_config()["default_profile"]
+    load_profile(load_config(), profile_name)
+    _want(project, version=version, profile=profile_name, state="running")
     _event(project, "start", version, previous.get("version"))
     return status(project)
 
 
 def stop(project: str) -> dict:
-    current = status(project)
-    if "version" not in current:
+    current = desired(project)
+    if not current or current["state"] != "running":
         raise ContractError(f"{project} is not deployed")
-    docker("rm", "-f", container_name(project))
-    write_targets()
+    _want(project, version=current["version"], profile=current["profile"], state="stopped")
     _event(project, "stop", current["version"])
     return status(project)
 
 
 def follow_production(project: str) -> dict | None:
-    current = status(project)
+    current = desired(project)
     production = models.production_version(project)
-    if current.get("version") is None or production is None or current["version"] == production:
+    if not current or current["state"] != "running" or production is None or current["version"] == production:
         return None
-    return start(project, production, current.get("profile"))
+    return start(project, production, current["profile"])
+
+
+def reconcile(only: str | None = None) -> list[str]:
+    """Make Docker match the desired state: start, replace or remove service containers."""
+    actions = []
+    for name in _labelled() if only is None else []:
+        if desired(name) is None:  # started before desired state existed: adopt it as is
+            st = status(name)
+            if st.get("version"):
+                _want(name, version=st["version"], profile=st.get("profile") or load_config()["default_profile"],
+                      state="running" if st["running"] else "stopped")
+    with db.engine().connect() as conn:
+        rows = conn.execute(sa.select(db.deployments)).mappings().all()
+    for row in rows:
+        project = row["project"]
+        if only and project != only:
+            continue
+        st = status(project)
+        try:
+            if row["state"] == "running" and (not st["running"] or st.get("version") != row["version"]
+                                              or st.get("profile") != row["profile"]):
+                _run_service(project, row["version"], row["profile"])
+                actions.append(f"{project}: v{row['version']} on {row['profile']}")
+            elif row["state"] == "stopped" and "version" in st:
+                docker("rm", "-f", container_name(project))
+                write_targets()
+                actions.append(f"{project}: stopped")
+            elif row["error"] is None:
+                continue
+            _error(project, None)
+        except Exception as e:  # kept on the row and shown in the UI, retried on the next pass
+            _error(project, str(e))
+            actions.append(f"{project}: {e}")
+    return actions
+
+
+def _error(project: str, error: str | None) -> None:
+    with db.engine().begin() as conn:
+        conn.execute(sa.update(db.deployments).where(db.deployments.c.project == project).values(error=error))
+
+
+def _labelled() -> list[str]:
+    r = docker("ps", "-a", "--filter", f"label={LABEL}", "--format", f'{{{{.Label "{LABEL}"}}}}', check=False)
+    return [n for n in r.stdout.split() if n]
 
 
 def deployments() -> list[dict]:

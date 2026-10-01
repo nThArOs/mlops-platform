@@ -111,6 +111,17 @@ jobs = sa.Table(
     sa.Column("heartbeat_at", sa.DateTime(timezone=True)),
 )
 
+# Desired state of each production service; the worker's reconcile loop makes Docker match it.
+deployments = sa.Table(
+    "deployments", metadata,
+    sa.Column("project", sa.String(200), primary_key=True),
+    sa.Column("version", sa.Integer, nullable=False),
+    sa.Column("profile", sa.String(100), nullable=False),
+    sa.Column("state", sa.String(20), nullable=False, server_default="running"),
+    sa.Column("error", sa.Text),
+    sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+)
+
 MIGRATIONS = [
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS confusion JSON",
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS extras JSON",

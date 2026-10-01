@@ -213,6 +213,7 @@ def _run(job: dict) -> None:
         beat = time.time()
         while proc.poll() is None:
             time.sleep(2)
+            _maybe_reconcile()
             if time.time() - beat > HEARTBEAT_S:
                 beat = time.time()
                 _update(job["id"], heartbeat_at=_now())
@@ -335,6 +336,23 @@ def _env() -> dict:
     return {**os.environ, "MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT": "1"}
 
 
+_reconciled = 0.0
+
+
+def _maybe_reconcile() -> None:
+    global _reconciled
+    if time.time() - _reconciled < 5:
+        return
+    _reconciled = time.time()
+    from . import deploy
+
+    try:
+        for action in deploy.reconcile():
+            print(f"reconcile {action}", flush=True)
+    except Exception as e:  # Docker or the database briefly unavailable: next pass
+        print(f"reconcile failed: {e}", flush=True)
+
+
 def _maybe_check_triggers() -> None:
     global _last_trigger_check
     if time.time() - _last_trigger_check < TRIGGER_PERIOD:
@@ -350,6 +368,7 @@ def work(poll: float = 2.0) -> None:
     print(f"worker {WORKER} ready", flush=True)
     while True:
         reap()
+        _maybe_reconcile()
         _maybe_check_triggers()
         job = claim()
         if job is None:
