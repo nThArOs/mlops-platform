@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { statusBadge as jobBadge } from "./Runs";
 import { ArrowLeft, ExternalLink, Play, RotateCcw } from "lucide-react";
-import { models, type ModelEvent, type ModelSummary, type PromotionCheck } from "../api";
+import { jobs, models, type ModelEvent, type ModelSummary, type PromotionCheck } from "../api";
 import VersionDetails from "../components/VersionDetails";
 import InfoTip from "../components/InfoTip";
 import TrainDialog from "../components/TrainDialog";
@@ -135,6 +136,33 @@ function Interval({ range }: { range?: [number, number] }) {
     <span className="interval" title="95 % interval when the evaluation sequences are resampled">
       {metric(range[0])}–{metric(range[1])}
     </span>
+  );
+}
+
+function RecentRuns({ model }: { model: string }) {
+  const navigate = useNavigate();
+  const list = useFetch(() => jobs.list(model), [model]);
+  if (!list.data?.length) return null;
+  return (
+    <div className="section">
+      <div className="section-head">
+        <h2 className="section-title">Runs</h2>
+        <Link to="/runs" style={{ textDecoration: "underline", textDecorationColor: "var(--border-strong)" }}>all runs</Link>
+      </div>
+      <table className="rows">
+        <tbody>
+          {list.data.slice(0, 5).map((j) => (
+            <tr key={j.id} className="link" onClick={() => navigate(`/runs/${j.id}`)}>
+              <td className="mono muted" style={{ width: 48 }}>#{j.id}</td>
+              <td><Badge>{j.entrypoint}</Badge></td>
+              <td className="mono muted">{j.entrypoint === "evaluate" ? j.spec.model : j.spec.variant ?? j.spec.config}</td>
+              <td>{jobBadge(j.status)}</td>
+              <td className="muted">{date(j.created_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -314,6 +342,8 @@ export default function ModelPage() {
           {meta && <VersionDetails version={cmShown} dataset={dataset} meta={meta} />}
         </div>
       )}
+
+      <RecentRuns model={project} />
 
       <div className="section">
         <div className="section-head"><h2 className="section-title">History</h2></div>
