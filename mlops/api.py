@@ -163,9 +163,9 @@ def get_model(project: str):
 def check_promotion(project: str, version: int, dataset: str | None = None):
     dv = datasets.get_version(dataset)["id"] if dataset else None
     try:
-        return {"allowed": True, "detail": models.check_promotion(project, version, dv)}
+        return models.promotion_checks(project, version, dv)
     except ContractError as e:
-        return {"allowed": False, "detail": str(e)}
+        return {"allowed": False, "detail": str(e), "checks": []}
 
 
 @app.post("/api/models/{project}/promote")

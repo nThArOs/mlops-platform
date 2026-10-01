@@ -6,7 +6,7 @@ import InfoTip from "../components/InfoTip";
 import { Badge, Loading, Note, Stat } from "../components/ui";
 import { ago, date } from "../lib/format";
 import { useFetch } from "../lib/useFetch";
-import { PromoteDialog } from "./Model";
+import { Checks, PromoteDialog } from "./Model";
 
 export function statusBadge(status: Job["status"]) {
   if (status === "running") return <Badge tone="warning" dot>running</Badge>;
@@ -154,6 +154,7 @@ function Comparison({ job }: { job: Job }) {
           )}
         </div>
       )}
+      {check.data && <div style={{ marginTop: 12 }}><Checks result={check.data} /></div>}
       {message && <div style={{ marginTop: 12 }}><Note kind="success">{message}</Note></div>}
       {promoting && (
         <PromoteDialog project={reg.model} version={reg.version} dataset={ref ?? null} onClose={() => setPromoting(false)}

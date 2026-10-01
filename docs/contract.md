@@ -73,6 +73,7 @@ constraints:
 | `metrics.higher_is_better` | yes | Direction of the primary metric |
 | `metrics.watch` | no | Metrics shown on dashboards and checked by alert rules |
 | `metrics.descriptions` | no | Plain-language explanation per metric key, shown in the UI info tips; common metrics are already described |
+| `promotion` | no | Promotion rule: `min_gain` on the primary metric (default 0, strictly better), `no_regression` as `{metric: higher\|lower}` with a relative `tolerance` (default 0.02) |
 | `constraints` | no | Limits per hardware profile; a model that exceeds them is never promoted |
 
 ## Placeholders

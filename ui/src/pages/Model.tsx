@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Play, RotateCcw } from "lucide-react";
-import { models, type ModelEvent, type ModelSummary } from "../api";
+import { models, type ModelEvent, type ModelSummary, type PromotionCheck } from "../api";
 import VersionDetails from "../components/VersionDetails";
 import InfoTip from "../components/InfoTip";
 import TrainDialog from "../components/TrainDialog";
@@ -15,6 +15,22 @@ function statusBadge(status: string) {
   if (status === "production") return <Badge tone="success" dot>production</Badge>;
   if (status === "candidate") return <Badge tone="warning">candidate</Badge>;
   return <Badge>{status || "registered"}</Badge>;
+}
+
+export function Checks({ result }: { result: PromotionCheck }) {
+  if (!result.checks.length) return null;
+  return (
+    <div className="checks">
+      {result.checks.map((c) => (
+        <div key={c.metric} className={`check-row ${c.ok ? "ok" : "ko"}`}>
+          <span className="check-mark" aria-label={c.ok ? "passed" : "failed"}>{c.ok ? "✓" : "✕"}</span>
+          <span className="mono">{c.metric}<InfoTip metric={c.metric} /></span>
+          <span className="mono">{c.new === null ? "–" : metric(c.new)} <span className="faint">vs</span> {c.current === null ? "–" : metric(c.current)}</span>
+          <span className="faint">{c.rule}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function PromoteDialog({ project, version, dataset, onClose, onDone }: {
@@ -61,6 +77,7 @@ export function PromoteDialog({ project, version, dataset, onClose, onDone }: {
       }>
       {check.loading && <Loading label="Checking" />}
       {check.data && <Note kind={allowed ? "success" : "error"}>{check.data.detail}</Note>}
+      {check.data && <Checks result={check.data} />}
       {check.data && !allowed && (
         <label className="check">
           <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />

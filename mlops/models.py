@@ -147,16 +147,18 @@ def _contract(key: str) -> dict:
     return contract
 
 
-def check_promotion(project: str, version: int, dataset_version_id: int | None = None) -> str:
-    """Return a description of the comparison, raise ContractError if the version is not better."""
-    metrics = _contract(project)["metrics"]
+def promotion_checks(project: str, version: int, dataset_version_id: int | None = None) -> dict:
+    """Compare a version with production under the project promotion rule. Raises if it can't be compared."""
+    contract = _contract(project)
+    metrics = contract["metrics"]
+    rule = contract.get("promotion") or {}
     primary, higher = metrics["primary"], bool(metrics["higher_is_better"])
     new = evaluations(project, version)
     if not new:
         raise ContractError(f"v{version} has no evaluation, run evaluate with --model {project}@v{version}")
     current = production_version(project)
     if current is None:
-        return f"first production version, no comparison"
+        return {"allowed": True, "detail": "first production version, no comparison", "checks": []}
     cur = evaluations(project, current)
     common = set(new) & set(cur)
     if dataset_version_id is not None:
@@ -166,12 +168,43 @@ def check_promotion(project: str, version: int, dataset_version_id: int | None =
     dv = max(common)
     if primary not in new[dv] or primary not in cur[dv]:
         raise ContractError(f"metric {primary} missing from the evaluations on {ref_of(dv)}")
+
+    checks = []
     a, b = new[dv][primary], cur[dv][primary]
-    better = a > b if higher else a < b
-    detail = f"{primary} {a:g} vs {b:g} (v{current}) on {ref_of(dv)}"
-    if not better:
-        raise ContractError(f"refused: {detail}, not better")
-    return detail
+    gain = (a - b) if higher else (b - a)
+    min_gain = float(rule.get("min_gain", 0))
+    checks.append({
+        "metric": primary, "new": a, "current": b,
+        "ok": gain > min_gain if min_gain == 0 else gain >= min_gain,
+        "rule": f"must be {'higher' if higher else 'lower'}" + (f" by at least {min_gain:g}" if min_gain else ""),
+    })
+    tolerance = float(rule.get("tolerance", 0.02))
+    guarded = rule.get("no_regression") or {}
+    if isinstance(guarded, list):
+        guarded = {k: "higher" for k in guarded}
+    for key, direction in guarded.items():
+        if key not in new[dv] or key not in cur[dv]:
+            checks.append({"metric": key, "new": new[dv].get(key), "current": cur[dv].get(key), "ok": True,
+                           "rule": "not measured on both versions, skipped"})
+            continue
+        x, y = new[dv][key], cur[dv][key]
+        margin = tolerance * abs(y)
+        ok = x >= y - margin if direction == "higher" else x <= y + margin
+        checks.append({"metric": key, "new": x, "current": y, "ok": ok,
+                       "rule": f"must not {'drop' if direction == 'higher' else 'rise'} more than {tolerance:.0%}"})
+    allowed = all(c["ok"] for c in checks)
+    failed = [c for c in checks if not c["ok"]]
+    head = f"{primary} {a:g} vs {b:g} (v{current}) on {ref_of(dv)}"
+    detail = head if allowed else f"refused on {ref_of(dv)} against v{current}: " + "; ".join(
+        f"{c['metric']} {c['new']:g} vs {c['current']:g}, {c['rule']}" for c in failed)
+    return {"allowed": allowed, "detail": detail, "checks": checks, "dataset": ref_of(dv), "current": current}
+
+
+def check_promotion(project: str, version: int, dataset_version_id: int | None = None) -> str:
+    result = promotion_checks(project, version, dataset_version_id)
+    if not result["allowed"]:
+        raise ContractError(result["detail"])
+    return result["detail"]
 
 
 def _set_production(project: str, version: int, action: str, reason: str | None, forced: bool) -> int | None:

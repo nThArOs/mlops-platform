@@ -146,6 +146,14 @@ export type Extras = {
   intervals?: Record<string, [number, number]>;
 };
 
+export type PromotionCheck = {
+  allowed: boolean;
+  detail: string;
+  checks: { metric: string; new: number | null; current: number | null; ok: boolean; rule: string }[];
+  dataset?: string;
+  current?: number;
+};
+
 export type ModelEvent = {
   id: number;
   action: string;
@@ -180,7 +188,7 @@ export const models = {
   list: () => request<ModelSummary[]>("/api/models"),
   get: (project: string) => request<ModelDetail>(`/api/models/${project}`),
   check: (project: string, version: number, dataset?: string) =>
-    request<{ allowed: boolean; detail: string }>(
+    request<PromotionCheck>(
       `/api/models/${project}/versions/${version}/check${dataset ? `?dataset=${encodeURIComponent(dataset)}` : ""}`),
   promote: (project: string, body: { version: number; dataset?: string; force?: boolean; reason?: string }) =>
     request<{ detail: string; deployment: Deployment | null }>(`/api/models/${project}/promote`, json(body)),
