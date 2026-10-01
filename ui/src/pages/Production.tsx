@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Play, Square } from "lucide-react";
-import { models, production, type Deployment, type LiveMetrics } from "../api";
+import { jobs, models, production, type Deployment, type LiveMetrics } from "../api";
 import Drift from "../components/Drift";
 import InfoTip from "../components/InfoTip";
 import LineChart from "../components/LineChart";
 import { Badge, Loading, Note, Stat } from "../components/ui";
 import { ago } from "../lib/format";
+import * as health from "../lib/health";
 import { useFetch } from "../lib/useFetch";
 
 const RANGES = [
@@ -206,6 +207,8 @@ export function ProductionService() {
   const { project = "" } = useParams();
   const [minutes, setMinutes] = useState(60);
   const status = useFetch(() => production.get(project), [project]);
+  const summary = useFetch(models.list, []);
+  const options = useFetch(() => jobs.options(project.split(".")[0]).catch(() => null), [project]);
   const metrics = useFetch(() => production.metrics(project, minutes), [project, minutes]);
   const [logs, setLogs] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +238,11 @@ export function ProductionService() {
   if (status.loading && !status.data) return <Loading />;
   const d = status.data;
   const m = metrics.data ?? {};
+  const limits = (d?.profile && summary.data?.find((x) => x.name === project)?.constraints[d.profile]) || {};
+  const cpus = options.data?.profiles.find((p) => p.name === d?.profile)?.cpus;
+  const p95 = last(m.latency_p95_ms);
+  const rate = last(m.error_rate);
+  const fps = last(m.requests_per_s);
 
   return (
     <>
@@ -278,14 +286,19 @@ export function ProductionService() {
       )}
 
       <div className="stats">
-        <Stat label={<>Latency p95<InfoTip metric="latency" /></>} value={last(m.latency_p95_ms) !== undefined ? ms(last(m.latency_p95_ms)!) : "–"} />
-        <Stat label={<>Throughput<InfoTip metric="throughput" /></>} value={last(m.requests_per_s) !== undefined ? rps(last(m.requests_per_s)!) : "–"} />
-        <Stat label={<>Error rate<InfoTip metric="error_rate" /></>} value={last(m.error_rate) !== undefined ? pct(last(m.error_rate)!) : "–"} />
+        <Stat label={<>Latency p95<InfoTip metric="latency" /></>} value={p95 !== undefined ? ms(p95) : "–"}
+          health={p95 !== undefined ? health.latency(p95, limits.latency_p95_ms) : undefined} />
+        <Stat label={<>Throughput<InfoTip metric="throughput" /></>} value={fps !== undefined ? rps(fps) : "–"}
+          health={fps !== undefined ? health.throughput(fps, limits.fps) : undefined} />
+        <Stat label={<>Error rate<InfoTip metric="error_rate" /></>} value={rate !== undefined ? pct(rate) : "–"}
+          health={rate !== undefined ? health.errors(rate) : undefined} />
         {d?.resources && (
-          <Stat label={<>CPU<InfoTip metric="cpu" /></>} value={`${(d.resources.cpu_pct / 100).toFixed(2)} cores`} />
+          <Stat label={<>CPU<InfoTip metric="cpu" /></>} value={`${(d.resources.cpu_pct / 100).toFixed(2)} cores`}
+            health={health.cpu(d.resources.cpu_pct / 100, cpus)} />
         )}
         {d?.resources && (
           <Stat label={<>Memory<InfoTip metric="memory" align="right" /></>}
+            health={health.memory(d.resources.mem_mb, d.resources.mem_limit_mb)}
             value={<>{d.resources.mem_mb.toFixed(0)} MB{d.resources.mem_limit_mb < 15000 && <span className="faint" style={{ fontSize: 12.5 }}> / {d.resources.mem_limit_mb.toFixed(0)}</span>}</>} />
         )}
         <Stat label={m.confidence_mean?.length

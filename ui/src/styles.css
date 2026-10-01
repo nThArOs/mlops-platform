@@ -366,3 +366,13 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .dataset-row.off > .mono:not(select) { color: var(--text-3); }
 .dataset-mount { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dataset-history { font-size: 12px; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.stat.good { background: var(--success-bg); }
+.stat.warning { background: var(--warning-bg); }
+.stat.danger { background: var(--danger-bg); }
+.stat-note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.stat-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.stat.good .stat-dot { background: var(--success); }
+.stat.warning .stat-dot { background: var(--warning); }
+.stat.danger .stat-dot { background: var(--danger); }
+.stat.danger .stat-note { color: var(--danger); }

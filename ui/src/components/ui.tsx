@@ -22,11 +22,16 @@ export function Badge({ tone, dot, children }: { tone?: "success" | "warning" | 
   );
 }
 
-export function Stat({ label, value }: { label: ReactNode; value: ReactNode }) {
+export function Stat({ label, value, health }: {
+  label: ReactNode;
+  value: ReactNode;
+  health?: { tone: "good" | "warning" | "danger"; note: string };
+}) {
   return (
-    <div className="stat">
+    <div className={`stat ${health?.tone ?? ""}`}>
       <div className="label">{label}</div>
       <div className="value">{value}</div>
+      {health && <div className="stat-note"><span className="stat-dot" />{health.note}</div>}
     </div>
   );
 }
