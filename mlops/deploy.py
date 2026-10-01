@@ -19,13 +19,26 @@ from .run import CONTAINER_MODEL_DIR, image_id, load_profile, render_command
 LABEL = "mlops.project"
 
 
-def free_port() -> int:
+def free_port(wanted: int = 0) -> int | None:
     # an explicit host port survives container restarts, an ephemeral one changes and loses Prometheus
     import socket
 
     with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
+        try:
+            s.bind(("127.0.0.1", wanted))
+        except OSError:
+            return None
         return s.getsockname()[1]
+
+
+def host_port(service_dir: Path, current: int | None) -> int:
+    """Keep the port a service had, across restarts and stop/start, unless something else took it."""
+    saved = service_dir / "port"
+    known = int(saved.read_text()) if saved.is_file() else None
+    port = next((p for p in (current, known) if p and free_port(p)), None) or free_port()
+    service_dir.mkdir(parents=True, exist_ok=True)
+    saved.write_text(str(port))
+    return port
 
 
 def container_name(key: str) -> str:
@@ -155,7 +168,8 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
     image = spec.image_for(slot)
     image_id(image)
 
-    model_dir = resolve(cfg["runs_dir"]) / "serve" / project.replace(".", "-") / f"v{version}"
+    service_dir = resolve(cfg["runs_dir"]) / "serve" / project.replace(".", "-")
+    model_dir = service_dir / f"v{version}"
     if model_dir.exists():
         shutil.rmtree(model_dir)
     model_path = models.download(project, version, model_dir)
@@ -165,10 +179,11 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
 
     previous = status(project)
     docker("rm", "-f", container_name(project), check=False)
+    port = host_port(service_dir, previous.get("port"))
     args = ["run", "-d", "--name", container_name(project), "--restart", "unless-stopped",
             "--label", f"{LABEL}={project}", "--label", f"mlops.version={version}",
             "--label", f"mlops.profile={profile_name}",
-            "-p", f"127.0.0.1:{previous.get('port') or free_port()}:{ep.port}",
+            "-p", f"127.0.0.1:{port}:{ep.port}",
             "-v", f"{spec.root}:{spec.workdir}:ro", "-v", f"{mount}:{CONTAINER_MODEL_DIR}:ro",
             "-w", spec.workdir, "-e", f"MLOPS_PROFILE={profile_name}"]
     if profile.get("cpus"):

@@ -34,3 +34,15 @@ def test_psi():
 def test_docker_parsers():
     assert _timestamp("2026-10-01T02:43:20.5Z") - _timestamp("2026-10-01T02:43:20Z") == pytest.approx(0.5)
     assert _mib("1.5GiB") == 1536 and _mib("512MiB") == 512
+
+
+def test_host_port_is_kept_across_stop_and_start(tmp_path):
+    import socket
+
+    from mlops.deploy import host_port
+
+    first = host_port(tmp_path, None)
+    assert host_port(tmp_path, None) == first
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", first))
+        assert host_port(tmp_path, None) != first
