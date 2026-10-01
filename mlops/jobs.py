@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -159,6 +160,43 @@ def _parse(text: str) -> dict:
     return out
 
 
+WORKER = f"{socket.gethostname()}-{os.getpid()}"
+HEARTBEAT_S = 10
+# a job whose worker stopped beating for this long is gone: its container is removed and the job failed
+STALE_S = 90
+
+
+def claim() -> dict | None:
+    """Take the oldest queued job; SKIP LOCKED lets several workers share the queue."""
+    j = db.jobs
+    oldest = (sa.select(j.c.id).where(j.c.status == "queued").order_by(j.c.id).limit(1)
+              .with_for_update(skip_locked=True).scalar_subquery())
+    with db.engine().begin() as conn:
+        row = conn.execute(sa.update(j).where(j.c.id == oldest)
+                           .values(status="running", worker=WORKER, started_at=_now(), heartbeat_at=_now())
+                           .returning(*j.c)).mappings().first()
+    return dict(row) if row else None
+
+
+def reap() -> list[int]:
+    """Fail the jobs of workers that stopped beating and remove the containers they left running."""
+    j = db.jobs
+    limit = datetime.fromtimestamp(time.time() - STALE_S, timezone.utc)
+    with db.engine().begin() as conn:
+        ids = conn.execute(sa.update(j).where(
+            j.c.status.in_(("running", "cancelling")),
+            sa.or_(j.c.heartbeat_at.is_(None), j.c.heartbeat_at < limit))
+            .values(status="failed", error="worker lost, its container was removed", finished_at=_now())
+            .returning(j.c.id)).scalars().all()
+    for job_id in ids:
+        containers = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=mlops.job={job_id}"],
+                                    capture_output=True, text=True).stdout.split()
+        if containers:
+            subprocess.run(["docker", "rm", "-f", *containers], capture_output=True)
+        print(f"job {job_id}: worker lost, removed {len(containers)} container(s)", flush=True)
+    return ids
+
+
 def _run(job: dict) -> None:
     folder = job_dir(job["id"])
     folder.mkdir(parents=True, exist_ok=True)
@@ -168,13 +206,16 @@ def _run(job: dict) -> None:
     except Exception as e:
         _update(job["id"], status="failed", error=str(e), finished_at=_now())
         return
-    _update(job["id"], status="running", started_at=_now())
     with open(log_path, "wb") as log_file:
         proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, cwd=str(resolve(".")),
-                                env={**_env(), "PYTHONUNBUFFERED": "1"})
+                                env={**_env(), "PYTHONUNBUFFERED": "1", "MLOPS_JOB_ID": str(job["id"])})
         cancelled = False
+        beat = time.time()
         while proc.poll() is None:
             time.sleep(2)
+            if time.time() - beat > HEARTBEAT_S:
+                beat = time.time()
+                _update(job["id"], heartbeat_at=_now())
             _maybe_check_triggers()
             if get(job["id"])["status"] == "cancelling":
                 cancelled = True
@@ -306,19 +347,14 @@ def _maybe_check_triggers() -> None:
 
 
 def work(poll: float = 2.0) -> None:
-    with db.engine().begin() as conn:
-        conn.execute(sa.update(db.jobs).where(db.jobs.c.status.in_(("running", "cancelling")))
-                     .values(status="failed", error="worker restarted", finished_at=_now()))
-    print("worker ready", flush=True)
+    print(f"worker {WORKER} ready", flush=True)
     while True:
+        reap()
         _maybe_check_triggers()
-        with db.engine().connect() as conn:
-            row = conn.execute(sa.select(db.jobs).where(db.jobs.c.status == "queued")
-                               .order_by(db.jobs.c.id).limit(1)).mappings().first()
-        if row is None:
+        job = claim()
+        if job is None:
             time.sleep(poll)
             continue
-        job = dict(row)
         print(f"job {job['id']}: {job['model']} {job['entrypoint']}", flush=True)
         _run(job)
         print(f"job {job['id']}: {get(job['id'])['status']}", flush=True)

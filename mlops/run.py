@@ -234,6 +234,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             docker_cmd += ["--cpus", str(profile["cpus"])]
         if cpuset:
             docker_cmd += ["--cpuset-cpus", cpuset]
+        if os.environ.get("MLOPS_JOB_ID"):
+            docker_cmd += ["--label", f"mlops.job={os.environ['MLOPS_JOB_ID']}"]
         if profile.get("memory"):
             docker_cmd += ["--memory", str(profile["memory"])]
         if project.shm_size:

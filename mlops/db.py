@@ -107,12 +107,16 @@ jobs = sa.Table(
     _created(),
     sa.Column("started_at", sa.DateTime(timezone=True)),
     sa.Column("finished_at", sa.DateTime(timezone=True)),
+    sa.Column("worker", sa.String(100)),
+    sa.Column("heartbeat_at", sa.DateTime(timezone=True)),
 )
 
 MIGRATIONS = [
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS confusion JSON",
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS extras JSON",
     "ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS worker VARCHAR(100)",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ",
 ]
 
 model_events = sa.Table(
