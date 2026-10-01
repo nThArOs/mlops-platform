@@ -15,6 +15,8 @@ from .config import load_config, resolve
 from .project import ContractError, load_project, split_key
 
 ACTIVE = ("queued", "running", "cancelling")
+TRIGGER_PERIOD = 60
+_last_trigger_check = 0.0
 
 
 def _now():
@@ -172,6 +174,7 @@ def _run(job: dict) -> None:
         cancelled = False
         while proc.poll() is None:
             time.sleep(2)
+            _maybe_check_triggers()
             if get(job["id"])["status"] == "cancelling":
                 cancelled = True
                 _kill(proc, log_path)
@@ -289,19 +292,24 @@ def _env() -> dict:
     return {**os.environ, "MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT": "1"}
 
 
+def _maybe_check_triggers() -> None:
+    global _last_trigger_check
+    if time.time() - _last_trigger_check < TRIGGER_PERIOD:
+        return
+    _last_trigger_check = time.time()
+    try:
+        check_triggers()
+    except Exception as e:
+        print(f"trigger check failed: {e}", flush=True)
+
+
 def work(poll: float = 2.0) -> None:
     with db.engine().begin() as conn:
         conn.execute(sa.update(db.jobs).where(db.jobs.c.status.in_(("running", "cancelling")))
                      .values(status="failed", error="worker restarted", finished_at=_now()))
     print("worker ready", flush=True)
-    last_check = 0.0
     while True:
-        if time.time() - last_check > 60:
-            last_check = time.time()
-            try:
-                check_triggers()
-            except Exception as e:
-                print(f"trigger check failed: {e}", flush=True)
+        _maybe_check_triggers()
         with db.engine().connect() as conn:
             row = conn.execute(sa.select(db.jobs).where(db.jobs.c.status == "queued")
                                .order_by(db.jobs.c.id).limit(1)).mappings().first()
