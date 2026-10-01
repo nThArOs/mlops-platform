@@ -111,6 +111,7 @@ The command runs with `sh -c` in the project image, with the project root mounte
 | `MLFLOW_RUN_ID` | Run created by the platform, for live logging |
 | `MLOPS_RUN_DIR` | Per-run scratch directory, `/mlops/run`, logged as artifacts |
 | `MLOPS_PROFILE` | Hardware profile name |
+| `MLOPS_DATASETS` | Mounted datasets as `name=mount,...`, mounts relative to `workdir`; empty when none |
 
 ## Outputs
 

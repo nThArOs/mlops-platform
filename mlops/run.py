@@ -191,9 +191,9 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             tags.update({"model.name": name, "model.version": str(version)})
         for version, mount in mounted:
             volumes += ["-v", f"{datasets.checkout(version)}:{project.workdir}/{mount}:ro"]
+            tags[f"dataset.{version['name']}"] = f"v{version['version']}"
         if external_config:
             volumes += ["-v", f"{external_config.parent}:{CONTAINER_CONFIG_DIR}:ro"]
-            tags[f"dataset.{version['name']}"] = f"v{version['version']}"
 
         params = {
             "entrypoint": entrypoint,
@@ -225,7 +225,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
                       "-e", f"MLFLOW_RUN={entrypoint}",
                       "-e", "MLFLOW_KEEP_RUN_ACTIVE=true",
                       "-e", f"MLOPS_RUN_DIR={CONTAINER_RUN_DIR}",
-                      "-e", f"MLOPS_PROFILE={profile_name}"]
+                      "-e", f"MLOPS_PROFILE={profile_name}",
+                      "-e", "MLOPS_DATASETS=" + ",".join(f"{v['name']}={mount}" for v, mount in mounted)]
         if profile.get("cpus"):
             docker_cmd += ["--cpus", str(profile["cpus"])]
         if profile.get("memory"):
