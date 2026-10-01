@@ -70,6 +70,7 @@ The platform replaces these in `command`:
 | `{model}` | `--model`: a path in the project, or the downloaded registry model for `project@vN` / `project@alias` |
 | `{dataset}`, `{dataset_path}` | Name and mount path of the dataset, when one `--dataset` is given |
 | `{split}`, `{sample}` | Values passed on the command line |
+| `{port}` | Container port of `serve` |
 | `{run_dir}` | Per-run scratch directory |
 
 ## Datasets and models
@@ -120,8 +121,13 @@ The command runs with `sh -c` in the project image, with the project root mounte
 
 ## Serve
 
-`serve` exposes Prometheus metrics on `GET /metrics`, at least:
+`mlops serve start <project>` runs `serve` with the production model mounted read-only (`{model}`) and `{port}` set to the declared port, published on `127.0.0.1` with a port kept across redeployments. Promotion and rollback redeploy a running service. Prometheus scrapes it through file discovery, with `project` and `version` labels.
 
-- `inference_latency_seconds` (histogram)
-- `inference_requests_total`, `inference_errors_total` (counters)
-- `prediction_confidence` (histogram), `predictions_per_input` (histogram)
+The service exposes Prometheus metrics on `GET /metrics`:
+
+| Metric | Type | Required |
+| --- | --- | --- |
+| `inference_latency_seconds` | histogram | yes |
+| `inference_requests_total`, `inference_errors_total` | counter | yes |
+| `predictions_per_input` | histogram | no |
+| `prediction_confidence` | histogram | no |

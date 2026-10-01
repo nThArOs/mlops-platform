@@ -52,7 +52,8 @@ def register(project: str, run_id: str) -> int:
 
 def download(project: str, version: int, dst: Path) -> Path:
     source = client().get_model_version(project, str(version)).source
-    path = Path(mlflow.artifacts.download_artifacts(artifact_uri=source, dst_path=str(dst)))
+    path = Path(mlflow.artifacts.download_artifacts(artifact_uri=source, dst_path=str(dst),
+                                                   tracking_uri=load_config()["tracking_uri"]))
     files = [p for p in path.rglob("*") if p.is_file()]
     return files[0] if len(files) == 1 else path
 

@@ -8,3 +8,4 @@ runs/
 mlartifacts/
 *.egg-info/
 store/
+prometheus/targets/

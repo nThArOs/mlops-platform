@@ -52,6 +52,14 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("split", "sample"):
         p.add_argument(f"--{name}")
 
+    sv = sub.add_parser("serve", help="production service").add_subparsers(dest="action", required=True)
+    p = sv.add_parser("start", help="deploy the production version, or --version")
+    p.add_argument("project")
+    p.add_argument("--version", type=lambda v: int(v.lstrip("v")))
+    p.add_argument("--profile")
+    for name in ("stop", "status", "logs"):
+        sv.add_parser(name).add_argument("project")
+
     p = sub.add_parser("api", help="start the platform API and UI")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -138,6 +146,14 @@ def dataset_command(args) -> int:
     return 0
 
 
+def _follow(project: str) -> None:
+    from . import deploy
+
+    st = deploy.follow_production(project)
+    if st:
+        print(f"service redeployed with v{st['version']}")
+
+
 def model_command(args) -> int:
     from . import datasets, models
 
@@ -153,13 +169,36 @@ def model_command(args) -> int:
         dv = datasets.get_version(args.dataset)["id"] if args.dataset else None
         detail = models.promote(args.project, args.version, dv, args.force, args.reason)
         print(f"{args.project}@v{args.version} in production ({detail})")
+        _follow(args.project)
     elif args.action == "rollback":
         version = models.rollback(args.project, args.reason)
         print(f"{args.project}@v{version} back in production")
+        _follow(args.project)
     elif args.action == "history":
         rows = [{**e, "from": f"v{e['from_version']}" if e["from_version"] else "", "to": f"v{e['to_version']}",
                  "at": e["created_at"].astimezone().strftime("%Y-%m-%d %H:%M")} for e in models.history(args.project)]
         table(rows, ["at", "action", "from", "to", "forced", "reason"])
+    return 0
+
+
+def serve_command(args) -> int:
+    from . import deploy
+
+    if args.action == "start":
+        st = deploy.start(args.project, args.version, args.profile)
+        print(f"{args.project}@v{st['version']} serving on http://127.0.0.1:{st['port']}")
+    elif args.action == "stop":
+        deploy.stop(args.project)
+        print(f"{args.project} stopped")
+    elif args.action == "status":
+        st = deploy.status(args.project)
+        if "version" not in st:
+            print(f"{args.project}: not deployed")
+        else:
+            print(f"{args.project}@v{st['version']}: {st['state']}, {'healthy' if st['healthy'] else 'unhealthy'}, "
+                  f"port {st['port']}, profile {st['profile']}, since {st['started_at'][:19]}")
+    elif args.action == "logs":
+        print(deploy.logs(args.project), end="")
     return 0
 
 
@@ -177,6 +216,8 @@ def main(argv=None) -> int:
             return dataset_command(args)
         if args.cmd == "model":
             return model_command(args)
+        if args.cmd == "serve":
+            return serve_command(args)
         if args.cmd == "api":
             import uvicorn
 

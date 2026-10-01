@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import datasets, models
+from . import datasets, deploy, models
 from .config import ROOT, load_config, resolve
 from .project import ContractError
 from .store import rmtree
@@ -161,12 +161,50 @@ def check_promotion(project: str, version: int, dataset: str | None = None):
 @app.post("/api/models/{project}/promote")
 def promote(project: str, body: Promotion):
     dv = datasets.get_version(body.dataset)["id"] if body.dataset else None
-    return {"detail": models.promote(project, body.version, dv, body.force, body.reason)}
+    detail = models.promote(project, body.version, dv, body.force, body.reason)
+    return {"detail": detail, "deployment": deploy.follow_production(project)}
 
 
 @app.post("/api/models/{project}/rollback")
 def rollback(project: str, body: Rollback):
-    return {"version": models.rollback(project, body.reason)}
+    version = models.rollback(project, body.reason)
+    return {"version": version, "deployment": deploy.follow_production(project)}
+
+
+class Start(BaseModel):
+    version: int | None = None
+    profile: str | None = None
+
+
+@app.get("/api/production")
+def list_deployments():
+    return deploy.deployments()
+
+
+@app.get("/api/production/{project}")
+def deployment(project: str):
+    return {**deploy.status(project), "production": models.production_version(project)}
+
+
+@app.post("/api/production/{project}/start")
+def start_service(project: str, body: Start):
+    return deploy.start(project, body.version, body.profile)
+
+
+@app.post("/api/production/{project}/stop")
+def stop_service(project: str):
+    return deploy.stop(project)
+
+
+@app.get("/api/production/{project}/metrics")
+def service_metrics(project: str, minutes: int = 60):
+    minutes = max(5, min(minutes, 24 * 60))
+    return deploy.live_metrics(project, minutes, step=max(5, minutes * 60 // 240))
+
+
+@app.get("/api/production/{project}/logs")
+def service_logs(project: str, tail: int = 200):
+    return {"logs": deploy.logs(project, min(tail, 2000))}
 
 
 UI_DIST = ROOT / "ui" / "dist"

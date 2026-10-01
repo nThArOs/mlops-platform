@@ -41,7 +41,12 @@ mlops run examples/toy-regression evaluate --model toy-regression@candidate --da
 mlops model list toy-regression
 mlops model promote toy-regression 2
 mlops model rollback toy-regression
+mlops serve start toy-regression
+mlops serve status toy-regression
+mlops serve stop toy-regression
 ```
+
+`examples/toy-regression/load.py` sends test traffic to a running service.
 
 Dataset files are stored once by content hash in `store/`. By default they are hard-linked from the source folder, which makes the source files read-only; `--copy` keeps them editable at the cost of disk space.
 

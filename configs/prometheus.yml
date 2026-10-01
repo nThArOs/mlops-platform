@@ -5,4 +5,7 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
-  # serve entrypoints are added here by the platform (step 5)
+  - job_name: serve
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/*.json"]
+        refresh_interval: 5s
