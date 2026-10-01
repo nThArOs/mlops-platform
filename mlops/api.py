@@ -288,6 +288,7 @@ class JobSpec(BaseModel):
     eval_datasets: list[str] = []
     values: dict[str, str] = {}
     benchmark_profiles: list[str] = []
+    auto_promote: bool = False
     note: str | None = None
 
 

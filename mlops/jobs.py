@@ -194,6 +194,84 @@ def _run(job: dict) -> None:
     for profile in spec.get("benchmark_profiles") or []:
         create({"project": job["project"], "slot": slot, "entrypoint": "benchmark", "model": ref,
                 "profile": profile}, parent_id=job["id"])
+    if spec.get("auto_promote") and not get(job["id"])["children"]:
+        _auto_promote(get(job["id"]))
+
+
+def _auto_promote(parent: dict) -> None:
+    reg = (parent.get("result") or {}).get("registered")
+    if not reg:
+        return
+    try:
+        detail = models.promote(reg["model"], reg["version"], reason=None)
+        from . import deploy
+
+        deployment = deploy.follow_production(reg["model"])
+        outcome = {"promoted": True, "detail": detail, "redeployed": bool(deployment)}
+    except ContractError as e:
+        outcome = {"promoted": False, "detail": str(e)}
+    _update(parent["id"], result={**parent["result"], "auto_promotion": outcome})
+    print(f"job {parent['id']}: auto promotion {'done' if outcome['promoted'] else 'refused'}: {outcome['detail']}",
+          flush=True)
+
+
+def _after_child(job: dict) -> None:
+    if not job.get("parent_id"):
+        return
+    parent = get(job["parent_id"])
+    if not parent["spec"].get("auto_promote") or "auto_promotion" in (parent.get("result") or {}):
+        return
+    with db.engine().connect() as conn:
+        statuses = conn.execute(sa.select(db.jobs.c.status).where(db.jobs.c.parent_id == parent["id"])).scalars().all()
+    if all(s not in ACTIVE for s in statuses):
+        _auto_promote(parent)
+
+
+def check_triggers() -> list[int]:
+    """Queue a training for each retrain rule whose dataset got a version no run of the model was trained on."""
+    created = []
+    with db.engine().connect() as conn:
+        contracts = conn.execute(sa.select(db.projects.c.name, db.projects.c.contract)).all()
+    for project, contract in contracts:
+        for rule in contract.get("retrain") or []:
+            slot = rule.get("model")
+            key = f"{project}.{slot}" if slot else project
+            refs = []
+            fresh = []
+            for name in rule.get("datasets", []):
+                try:
+                    version = datasets.get_version(name)
+                except ContractError:
+                    continue
+                refs.append(f"{name}@v{version['version']}")
+                with db.engine().connect() as conn:
+                    seen = conn.execute(sa.select(db.retrain_triggers).where(
+                        db.retrain_triggers.c.model == key,
+                        db.retrain_triggers.c.dataset_version_id == version["id"])).first()
+                    trained = conn.execute(sa.select(db.run_datasets.c.run_id).where(db.run_datasets.c.dataset_version_id == version["id"],
+                                                  db.run_datasets.c.entrypoint.in_(("train", "import")),
+                                                  db.run_datasets.c.project == project)).first()
+                if not seen and not trained:
+                    fresh.append(version)
+            if not fresh:
+                continue
+            job_id = create({
+                "project": project, "slot": slot, "entrypoint": "train", "config": rule.get("config"),
+                "params": rule.get("params") or {}, "datasets": refs, "profile": rule.get("profile"),
+                "variant": rule.get("variant"), "auto_evaluate": bool(rule.get("eval_datasets")),
+                "eval_datasets": [f"{n}@v{datasets.get_version(n)['version']}" if "@" not in n else n
+                                  for n in rule.get("eval_datasets", [])],
+                "benchmark_profiles": rule.get("benchmark_profiles") or [],
+                "auto_promote": rule.get("promote") == "auto",
+                "note": "retrain on " + ", ".join(f"{v['name']}@v{v['version']}" for v in fresh),
+            })
+            with db.engine().begin() as conn:
+                for version in fresh:
+                    conn.execute(sa.insert(db.retrain_triggers).values(
+                        model=key, dataset_version_id=version["id"], job_id=job_id))
+            created.append(job_id)
+            print(f"trigger: job {job_id} for {key} ({', '.join(refs)})", flush=True)
+    return created
 
 
 def _kill(proc: subprocess.Popen, log_path: Path) -> None:
@@ -216,7 +294,14 @@ def work(poll: float = 2.0) -> None:
         conn.execute(sa.update(db.jobs).where(db.jobs.c.status.in_(("running", "cancelling")))
                      .values(status="failed", error="worker restarted", finished_at=_now()))
     print("worker ready", flush=True)
+    last_check = 0.0
     while True:
+        if time.time() - last_check > 60:
+            last_check = time.time()
+            try:
+                check_triggers()
+            except Exception as e:
+                print(f"trigger check failed: {e}", flush=True)
         with db.engine().connect() as conn:
             row = conn.execute(sa.select(db.jobs).where(db.jobs.c.status == "queued")
                                .order_by(db.jobs.c.id).limit(1)).mappings().first()
@@ -227,3 +312,4 @@ def work(poll: float = 2.0) -> None:
         print(f"job {job['id']}: {job['model']} {job['entrypoint']}", flush=True)
         _run(job)
         print(f"job {job['id']}: {get(job['id'])['status']}", flush=True)
+        _after_child(get(job["id"]))

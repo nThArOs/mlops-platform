@@ -83,6 +83,14 @@ model_benchmarks = sa.Table(
     _created(),
 )
 
+retrain_triggers = sa.Table(
+    "retrain_triggers", metadata,
+    sa.Column("model", sa.String(200), primary_key=True),
+    sa.Column("dataset_version_id", sa.ForeignKey("dataset_versions.id"), primary_key=True),
+    sa.Column("job_id", sa.ForeignKey("jobs.id")),
+    _created(),
+)
+
 jobs = sa.Table(
     "jobs", metadata,
     sa.Column("id", sa.Integer, primary_key=True),

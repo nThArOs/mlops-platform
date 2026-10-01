@@ -22,3 +22,10 @@ metrics:
   primary: rmse
   higher_is_better: false
   watch: [rmse, r2]
+
+# Retrain on every new version of the toy dataset and promote if the rule passes
+retrain:
+  - datasets: [toy]
+    config: configs/train.yaml
+    eval_datasets: [toy@v1]
+    promote: auto
