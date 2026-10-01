@@ -12,7 +12,7 @@ import yaml
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from . import cpus, datasets, db, models
+from . import cpus, datasets, db, models, preprocessing
 from .paths import to_host
 from .config import ROOT, load_config
 from .project import ContractError, Project, split_key
@@ -192,6 +192,15 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             volumes += ["-v", f"{to_host(model_path.parent if model_path.is_file() else model_path)}:{CONTAINER_MODEL_DIR}:ro"]
             command = command.replace(CONTAINER_MODEL_DIR, target, 1)
             tags.update({"model.name": name, "model.version": str(version)})
+        pinned = None
+        if registry_model and project.preprocessing:
+            pinned = models.preprocessing_snapshot(*registry_model, run_dir.parent / f"{run_id}_preprocessing")
+            volumes += preprocessing.mounts(pinned, project.preprocessing, project.workdir)
+            tags["preprocessing.pinned"] = str(pinned is not None)
+        prep_root = pinned or project.root
+        prep_hash = preprocessing.digest(prep_root, project.preprocessing)
+        if prep_hash:
+            tags["preprocessing"] = prep_hash
         for version, mount in mounted:
             volumes += ["-v", f"{to_host(datasets.checkout(version))}:{project.workdir}/{mount}:ro"]
             tags[f"dataset.{version['name']}"] = f"v{version['version']}"
@@ -214,6 +223,9 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             params.update(flatten_params(yaml.safe_load(config_host.read_text(encoding="utf-8")) or {}, "config."))
         mlflow.log_params(params)
         mlflow.set_tags(tags)
+        for rel in project.preprocessing:
+            folder = Path(preprocessing.ARTIFACT_DIR, rel).parent.as_posix()
+            mlflow.log_artifact(str(prep_root / rel), folder)
         mlflow.log_dict(hardware, "hardware.json")
         if config:
             mlflow.log_artifact(str(config_host), "config")
@@ -307,7 +319,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
 
     if status == "FINISHED" and outputs.get("model"):
         version = models.register(key, run_id, variant or (config_host.stem if config_host else None),
-                                  registry_model[1] if registry_model else None)
+                                  registry_model[1] if registry_model else None,
+                                  {"preprocessing": prep_hash} if prep_hash else None)
         print(f"registered {key}@v{version} (candidate)")
     if status == "FINISHED" and entrypoint == "benchmark" and registry_model and all_metrics:
         models.record_benchmark(registry_model[0], registry_model[1], run_id, profile_name, all_metrics,

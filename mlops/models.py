@@ -37,7 +37,8 @@ def resolve(ref: str) -> tuple[str, int]:
         raise ContractError(f"no model version with alias {target} for {name}")
 
 
-def register(project: str, run_id: str, variant: str | None = None, parent: int | None = None) -> int:
+def register(project: str, run_id: str, variant: str | None = None, parent: int | None = None,
+             tags: dict[str, str] | None = None) -> int:
     c = client()
     try:
         c.create_registered_model(project)
@@ -51,6 +52,8 @@ def register(project: str, run_id: str, variant: str | None = None, parent: int 
         c.set_model_version_tag(project, str(version), "variant", variant)
     if parent:
         c.set_model_version_tag(project, str(version), "parent", f"v{parent}")
+    for k, v in (tags or {}).items():
+        c.set_model_version_tag(project, str(version), k, v)
     c.set_registered_model_alias(project, CANDIDATE, str(version))
     return version
 
@@ -61,6 +64,17 @@ def download(project: str, version: int, dst: Path) -> Path:
                                                    tracking_uri=load_config()["tracking_uri"]))
     files = [p for p in path.rglob("*") if p.is_file()]
     return files[0] if len(files) == 1 else path
+
+
+def preprocessing_snapshot(project: str, version: int, dst: Path) -> Path | None:
+    """The preprocessing files pinned with this version, None when it predates pinning."""
+    from .preprocessing import ARTIFACT_DIR
+
+    run_id = client().get_model_version(project, str(version)).run_id
+    if not any(a.path == ARTIFACT_DIR for a in client().list_artifacts(run_id)):
+        return None
+    return Path(mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=ARTIFACT_DIR, dst_path=str(dst),
+                                                    tracking_uri=load_config()["tracking_uri"]))
 
 
 def record_evaluation(project: str, version: int, run_id: str, dataset_version_ids: list[int],
@@ -170,6 +184,7 @@ def list_versions(project: str) -> list[dict]:
             "version": version,
             "status": mv.tags.get("status", ""),
             "variant": mv.tags.get("variant"),
+            "preprocessing": mv.tags.get("preprocessing"),
             "parent": mv.tags.get("parent"),
             "description": mv.description or None,
             "aliases": aliases.get(version, []),
@@ -333,7 +348,15 @@ def list_projects() -> list[dict]:
                                                  .order_by(db.projects.c.name)).mappings()]
     registered = {m.name: m for m in c.search_registered_models()}
     out = []
+    from .paths import to_local
+    from .preprocessing import digest
+
     for row in rows:
+        files = row["contract"].get("preprocessing") or []
+        try:
+            current = digest(to_local(row["root"]), files)
+        except OSError:
+            current = None
         for key, slot in model_keys(row["contract"]):
             model = registered.get(key)
             contract = _contract(key)
@@ -350,6 +373,7 @@ def list_projects() -> list[dict]:
                 "descriptions": contract["metrics"].get("descriptions", {}),
                 "constraints": contract.get("constraints") or {},
                 "retrain": [r for r in contract.get("retrain") or [] if r.get("model") == slot],
+                "preprocessing": {"files": files, "current": current},
                 "versions": len(c.search_model_versions(f"name='{key}'")) if model else 0,
                 "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
                 "updated_at": row["updated_at"],

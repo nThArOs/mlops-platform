@@ -48,6 +48,7 @@ class Project:
     models: dict[str, ModelSlot]
     metrics: dict
     raw: dict
+    preprocessing: list[str] = field(default_factory=list)
 
     def model_key(self, slot: str | None) -> str:
         if not self.models:
@@ -122,7 +123,13 @@ def load_project(root: str | Path) -> Project:
         if key not in metrics:
             raise ContractError(f"missing field: metrics.{key}")
 
+    preprocessing = list(data.get("preprocessing") or [])
+    for rel in preprocessing:
+        if not (root / rel).is_file():
+            raise ContractError(f"preprocessing file not found: {rel}")
+
     return Project(
+        preprocessing=preprocessing,
         root=root,
         name=data["name"],
         image=data["image"],

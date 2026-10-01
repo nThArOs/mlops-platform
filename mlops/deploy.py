@@ -12,7 +12,7 @@ from pathlib import Path
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from . import cpus, db, models
+from . import cpus, db, models, preprocessing
 from .config import load_config, resolve
 from .paths import to_host, to_local
 from .project import ContractError, load_project, split_key
@@ -210,6 +210,9 @@ def _run_service(project: str, version: int, profile_name: str) -> None:
         args += ["--cpuset-cpus", cpuset, "--label", f"mlops.cpuset={cpuset}"]
     if profile.get("memory"):
         args += ["--memory", str(profile["memory"])]
+    if spec.preprocessing:
+        pinned = models.preprocessing_snapshot(project, version, service_dir / f"v{version}-preprocessing")
+        args += preprocessing.mounts(pinned, spec.preprocessing, spec.workdir)
     args += ["--entrypoint", "sh", image, "-c", command]
     docker(*args)
     write_targets()

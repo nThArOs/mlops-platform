@@ -61,6 +61,7 @@ constraints:
 | `image` | yes | Docker image that contains the code and its dependencies |
 | `workdir` | no | Directory where the project root is mounted in the container, default `/app` |
 | `shm_size` | no | Shared memory for the container, for example `2g` |
+| `preprocessing` | no | Files a model depends on besides its weights (input transforms, codec settings). A copy is stored with each version a run registers, and mounted over the project's files for every later run of that version and its service, so a model keeps the inputs it was trained on. The UI flags versions whose copy differs from the project's current files |
 | `task` | no | Free label, display only |
 | `models` | no | Several models in one project, each with its own versions and production version; `vars` fill placeholders in the shared entrypoints and outputs, `metrics` can override the project metrics, `image` can replace the project image for full isolation |
 | `datasets` | no | Registry datasets the project reads; `mount` is where a version is mounted read-only, relative to the project root |

@@ -124,6 +124,7 @@ export type ModelSummary = {
   descriptions: Record<string, string>;
   constraints: Record<string, Record<string, number>>;
   retrain: { datasets?: string[]; config?: string; promote?: string; benchmark_profiles?: string[] }[];
+  preprocessing: { files: string[]; current: string | null };
   versions: number;
   production: number | null;
   updated_at: string;
@@ -134,6 +135,7 @@ export type ModelVersion = {
   status: string;
   variant: string | null;
   parent: string | null;
+  preprocessing: string | null;
   description: string | null;
   aliases: string[];
   run_id: string;

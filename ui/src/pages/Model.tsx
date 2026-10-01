@@ -344,6 +344,15 @@ export default function ModelPage() {
                 <td>
                   {v.variant ? <span className="mono muted">{v.variant}</span> : <span className="faint">–</span>}
                   {v.parent && <span className="faint" style={{ display: "block", fontSize: 11.5 }}>from {v.parent}</span>}
+                  {meta && meta.preprocessing.files.length > 0 && (
+                    <span className="mono" style={{ display: "block", fontSize: 11.5 }}
+                      title={`Preprocessing files: ${meta.preprocessing.files.join(", ")}`}>
+                      {!v.preprocessing && <span className="faint">prep not pinned</span>}
+                      {v.preprocessing && (v.preprocessing === meta.preprocessing.current
+                        ? <span className="faint">prep {v.preprocessing.slice(0, 6)}</span>
+                        : <span style={{ color: "var(--warning)" }}>prep {v.preprocessing.slice(0, 6)}, project changed since</span>)}
+                    </span>
+                  )}
                 </td>
                 <td>{statusBadge(v.status)}</td>
                 <td>
