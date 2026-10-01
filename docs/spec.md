@@ -18,7 +18,7 @@
 | 14 | Edge: hardware profiles | Where to measure | `local`, Docker-limited (estimated); device agent later | Docker | profiles done, agent to do |
 | 15 | Edge: exports | Compare variants | ONNX, ONNX INT8, OpenVINO, exported by the project | ONNX Runtime (MIT), OpenVINO (Apache-2.0) | ONNX and INT8 done in the example project, OpenVINO to do |
 | 16 | Web UI | Overview | Datasets, models, runs, production pages; accuracy / latency per profile and constraint badges later | FastAPI (MIT), React (MIT), no Grafana | done for steps 1-4 |
-| 17 | Retraining | Automation | Triggers: new dataset version, drift, metric drop, schedule -> run -> compare -> promote | in-house worker | manual trigger only |
+| 17 | Retraining | Automation | Triggers: new dataset version, drift, metric drop, schedule -> run -> compare -> promote | in-house worker | done for new dataset versions, with optional automatic promotion; drift and schedule triggers to do |
 | 18 | Alerts | Notify | Thresholds on drift, latency, metrics | in-house | in-app alerts done, notifications (mail, chat) to do |
 
 ## Licensing

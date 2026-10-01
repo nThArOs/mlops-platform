@@ -61,7 +61,7 @@ export function RunsList() {
                 <td className="mono muted">{j.id}</td>
                 <td className="mono">{j.model}</td>
                 <td><Badge>{j.entrypoint}</Badge>{j.parent_id && <span className="faint" style={{ marginLeft: 6 }}>after #{j.parent_id}</span>}</td>
-                <td className="mono muted">{label(j)}</td>
+                <td className="mono muted">{label(j)}{j.spec.note && <span className="faint" style={{ display: "block", fontSize: 11.5 }}>{j.spec.note}</span>}</td>
                 <td>{statusBadge(j.status)}</td>
                 <td className="muted">{ago(j.created_at)}</td>
                 <td className="mono muted">{duration(j)}</td>
@@ -249,6 +249,15 @@ export function RunPage() {
       </div>
       {error && <Note kind="error">{error}</Note>}
       {j.error && j.status === "failed" && <Note kind="error">{j.error}. See the log below.</Note>}
+      {j.spec.note && <p className="muted" style={{ marginTop: 0 }}>Triggered automatically: {j.spec.note}.</p>}
+      {j.result?.auto_promotion && (
+        <div style={{ marginBottom: 16 }}>
+          <Note kind={j.result.auto_promotion.promoted ? "success" : "info"}>
+            Automatic promotion {j.result.auto_promotion.promoted ? "done" : "refused"}: {j.result.auto_promotion.detail}
+            {j.result.auto_promotion.redeployed ? ". The service was redeployed." : ""}
+          </Note>
+        </div>
+      )}
 
       <div className="stats">
         <Stat label="Config" value={<span style={{ fontSize: 13 }}>{j.spec.config ?? "–"}</span>} />

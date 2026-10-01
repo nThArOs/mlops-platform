@@ -250,6 +250,13 @@ export default function ModelPage() {
           <div className="eyebrow">{meta?.slot ? <Link to="/models" className="mono">{meta.project}</Link> : "model"}</div>
           <h1 className="title">{meta?.slot ?? project}</h1>
           {meta?.description && <div className="subtitle">{meta.description}</div>}
+          {meta?.retrain.map((r, i) => (
+            <div key={i} className="subtitle faint" style={{ fontSize: 13 }}>
+              Retrains on each new version of <span className="mono">{(r.datasets ?? []).join(", ")}</span>
+              {r.benchmark_profiles?.length ? <>, benchmarks on <span className="mono">{r.benchmark_profiles.join(", ")}</span></> : null}
+              {r.promote === "auto" ? ", promotes automatically when the rule passes" : ", promotion stays manual"}
+            </div>
+          ))}
           <div className="subtitle status-line">
             {detail.data!.production ? <Badge tone="success" dot>v{detail.data!.production} in production</Badge> : <Badge>no production version</Badge>}
             {meta && <span>primary metric <span className="mono">{meta.primary}</span><InfoTip metric={meta.primary} custom={meta.descriptions} />, {meta.higher_is_better ? "higher" : "lower"} is better</span>}

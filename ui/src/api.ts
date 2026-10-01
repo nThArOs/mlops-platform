@@ -123,6 +123,7 @@ export type ModelSummary = {
   watch: string[];
   descriptions: Record<string, string>;
   constraints: Record<string, Record<string, number>>;
+  retrain: { datasets?: string[]; config?: string; promote?: string; benchmark_profiles?: string[] }[];
   versions: number;
   production: number | null;
   updated_at: string;
@@ -233,11 +234,18 @@ export type Job = {
     model?: string | null;
     auto_evaluate?: boolean;
     eval_datasets?: string[];
+    benchmark_profiles?: string[];
+    auto_promote?: boolean;
     note?: string | null;
   };
   status: JobStatus;
   run_id: string | null;
-  result: { run_id?: string; registered?: { model: string; version: number }; evaluated?: boolean } | null;
+  result: {
+    run_id?: string;
+    registered?: { model: string; version: number };
+    evaluated?: boolean;
+    auto_promotion?: { promoted: boolean; detail: string; redeployed?: boolean };
+  } | null;
   error: string | null;
   parent_id: number | null;
   children?: number[];
