@@ -220,3 +220,28 @@ dialog.modal::backdrop { background: var(--overlay); }
   .main { padding: 24px 16px 64px; }
   .layout-2, .browser, .form-grid { grid-template-columns: 1fr; }
 }
+
+:root { --series-1: #2a78d6; --series-2: #eb6834; --grid: rgba(18, 18, 17, 0.08); }
+:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --grid: rgba(236, 235, 231, 0.08); }
+
+.chart { position: relative; }
+.chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.chart-title { font-size: 13px; color: var(--text-2); }
+.chart-legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-2); }
+.chart-legend .key { display: inline-block; width: 12px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 5px; }
+.chart svg { display: block; overflow: visible; }
+.chart .tick { font-family: var(--font-mono); font-size: 10.5px; fill: var(--text-3); }
+.chart .end-label { font-family: var(--font-mono); font-size: 11px; fill: var(--text-2); }
+.chart-tip {
+  position: absolute; top: 24px; pointer-events: none; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 6px 10px; font-size: 12px; white-space: nowrap; z-index: 2;
+}
+.chart-tip .row { display: flex; align-items: center; gap: 6px; }
+.chart-tip .key { width: 8px; height: 8px; border-radius: 50%; }
+.chart-empty { height: 140px; display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 13px; border-radius: var(--radius); background: var(--surface-2); }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 32px; }
+.status-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--text-2); }
+.timeline { display: flex; flex-direction: column; }
+.timeline-item { display: grid; grid-template-columns: 150px 90px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); align-items: baseline; }
+.logs { font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; max-height: 320px; overflow: auto; padding: 14px; margin: 0; }
+@media (max-width: 860px) { .charts { grid-template-columns: 1fr; } .timeline-item { grid-template-columns: 1fr; gap: 2px; } }

@@ -14,10 +14,10 @@ function initialTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-const nav = [
+const nav: { to: string; label: string; icon: typeof Box; soon?: boolean }[] = [
   { to: "/datasets", label: "Datasets", icon: Database },
-  { to: "/models", label: "Models", icon: Box, soon: true },
-  { to: "/production", label: "Production", icon: Activity, soon: true },
+  { to: "/models", label: "Models", icon: Box },
+  { to: "/production", label: "Production", icon: Activity },
 ];
 
 export default function Layout() {

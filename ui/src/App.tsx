@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import DatasetsPage from "./pages/Datasets";
 import DatasetPage from "./pages/Dataset";
+import ModelsPage from "./pages/Models";
+import ModelPage from "./pages/Model";
+import { ProductionList, ProductionService } from "./pages/Production";
 import Upcoming from "./pages/Upcoming";
 
 export default function App() {
@@ -12,8 +15,10 @@ export default function App() {
         <Route path="datasets" element={<DatasetsPage />} />
         <Route path="datasets/:name" element={<DatasetPage />} />
         <Route path="datasets/:name/v/:version" element={<DatasetPage />} />
-        <Route path="models" element={<Upcoming title="Models" />} />
-        <Route path="production" element={<Upcoming title="Production" />} />
+        <Route path="models" element={<ModelsPage />} />
+        <Route path="models/:project" element={<ModelPage />} />
+        <Route path="production" element={<ProductionList />} />
+        <Route path="production/:project" element={<ProductionService />} />
         <Route path="*" element={<Upcoming title="Not found" />} />
       </Route>
     </Routes>

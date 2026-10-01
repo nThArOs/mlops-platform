@@ -4,7 +4,7 @@ export default function Upcoming({ title }: { title: string }) {
   return (
     <div className="empty">
       <h1 className="title">{title}</h1>
-      <p>{title === "Not found" ? "This page doesn't exist." : "This page is part of the next step."}</p>
+      <p>This page doesn't exist.</p>
       <Link className="btn" to="/datasets">Go to datasets</Link>
     </div>
   );

@@ -111,3 +111,73 @@ export const api = {
     return request<AddResult>("/api/datasets/upload", { method: "POST", body: data });
   },
 };
+
+export type ModelSummary = {
+  name: string;
+  task: string | null;
+  primary: string;
+  higher_is_better: boolean;
+  versions: number;
+  production: number | null;
+  updated_at: string;
+};
+
+export type ModelVersion = {
+  version: number;
+  status: string;
+  aliases: string[];
+  run_id: string;
+  trained_on: string[];
+  evaluations: Record<string, Record<string, number>>;
+};
+
+export type ModelEvent = {
+  id: number;
+  action: string;
+  from_version: number | null;
+  to_version: number;
+  reason: string | null;
+  forced: boolean;
+  created_at: string;
+};
+
+export type ModelDetail = { versions: ModelVersion[]; history: ModelEvent[]; production: number | null };
+
+export type Deployment = {
+  project: string;
+  running: boolean;
+  state?: string;
+  version?: number;
+  profile?: string;
+  started_at?: string;
+  port?: number;
+  healthy?: boolean;
+  servable?: boolean;
+  production: number | null;
+};
+
+export type LiveMetrics = Record<string, [number, number][]>;
+
+export const models = {
+  info: () => request<{ mlflow_url: string; prometheus_url: string }>("/api/info"),
+  list: () => request<ModelSummary[]>("/api/models"),
+  get: (project: string) => request<ModelDetail>(`/api/models/${project}`),
+  check: (project: string, version: number, dataset?: string) =>
+    request<{ allowed: boolean; detail: string }>(
+      `/api/models/${project}/versions/${version}/check${dataset ? `?dataset=${encodeURIComponent(dataset)}` : ""}`),
+  promote: (project: string, body: { version: number; dataset?: string; force?: boolean; reason?: string }) =>
+    request<{ detail: string; deployment: Deployment | null }>(`/api/models/${project}/promote`, json(body)),
+  rollback: (project: string, reason?: string) =>
+    request<{ version: number; deployment: Deployment | null }>(`/api/models/${project}/rollback`, json({ reason })),
+};
+
+export const production = {
+  list: () => request<Deployment[]>("/api/production"),
+  get: (project: string) => request<Deployment>(`/api/production/${project}`),
+  start: (project: string, version?: number) =>
+    request<Deployment>(`/api/production/${project}/start`, json({ version })),
+  stop: (project: string) => request<Deployment>(`/api/production/${project}/stop`, { method: "POST" }),
+  metrics: (project: string, minutes: number) =>
+    request<LiveMetrics>(`/api/production/${project}/metrics?minutes=${minutes}`),
+  logs: (project: string) => request<{ logs: string }>(`/api/production/${project}/logs`),
+};
