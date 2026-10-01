@@ -11,8 +11,7 @@ task: detection-tracking
 
 datasets:
   - name: dut_anti_uav
-    format: mot
-    splits: [train, test]
+    mount: data/mot/dut_anti_uav
 
 entrypoints:
   train:
@@ -20,7 +19,7 @@ entrypoints:
     config: configs/train.yaml
     outputs: { model: models/*.pt, metrics: results/detect_*.json }
   evaluate:
-    command: python scripts/eval_mot.py --model {model} --dataset {dataset}
+    command: python scripts/eval_mot.py --model {model} --data {dataset_path}
     outputs: { metrics: results/metrics_*.json }
   benchmark:
     command: python scripts/benchmark.py --model {model} --input {sample}
@@ -33,7 +32,7 @@ export:
   formats: [onnx, onnx-int8, openvino]
 
 metrics:
-  primary: HOTA
+  primary: mean.HOTA
   higher_is_better: true
   watch: [HOTA, MOTA, IDF1, fps]
 
@@ -50,20 +49,35 @@ constraints:
 | `workdir` | no | Directory where the project root is mounted in the container, default `/app` |
 | `shm_size` | no | Shared memory for the container, for example `2g` |
 | `task` | no | Free label, display only |
-| `datasets` | no | Datasets used by the project; `format` is a free label |
+| `datasets` | no | Registry datasets the project reads; `mount` is where a version is mounted read-only, relative to the project root |
 | `entrypoints.train` | yes | Produces a model and a metrics JSON |
 | `entrypoints.evaluate` | yes | Produces a metrics JSON for a model and a dataset |
 | `entrypoints.benchmark` | no | Produces latency and resource metrics; a generic ONNX benchmark is used if absent |
 | `entrypoints.serve` | no | HTTP service; required for live monitoring |
 | `export.formats` | no | Model variants to benchmark |
-| `metrics.primary` | yes | Metric used to compare models and decide promotion |
+| `metrics.primary` | yes | Metric used to compare models and decide promotion, as a flattened key: `mean.HOTA` for a `HOTA` value inside a `mean` object |
 | `metrics.higher_is_better` | yes | Direction of the primary metric |
 | `metrics.watch` | no | Metrics shown on dashboards and checked by alert rules |
 | `constraints` | no | Limits per hardware profile; a model that exceeds them is never promoted |
 
 ## Placeholders
 
-The platform replaces these in `command`: `{config}`, `{model}`, `{dataset}`, `{split}`, `{sample}`, `{run_dir}`.
+The platform replaces these in `command`:
+
+| Placeholder | Value |
+| --- | --- |
+| `{config}` | Entrypoint config, or `--config` |
+| `{model}` | `--model`: a path in the project, or the downloaded registry model for `project@vN` / `project@alias` |
+| `{dataset}`, `{dataset_path}` | Name and mount path of the dataset, when one `--dataset` is given |
+| `{split}`, `{sample}` | Values passed on the command line |
+| `{run_dir}` | Per-run scratch directory |
+
+## Datasets and models
+
+- `--dataset name@vN` mounts that registry version read-only at its `mount`; without `@vN` the latest version is used. The run is linked to the version (lineage).
+- A successful run with a `model` output registers a new model version named after the project, with the `candidate` alias.
+- An `evaluate` run on a registry model with a dataset records the metrics on that model version for that dataset version.
+- Promotion to `production` requires the primary metric to be better than the current production version on a dataset version both were evaluated on. `--force` bypasses the check and requires a reason. Every change is kept in the history.
 
 ## Execution
 

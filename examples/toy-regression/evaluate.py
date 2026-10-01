@@ -2,14 +2,16 @@ import argparse
 import json
 from pathlib import Path
 
-from common import hardware, make_data, scores
+from common import hardware, load, scores
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", required=True)
-model = json.loads(Path(parser.parse_args().model).read_text())
+parser.add_argument("--data", required=True)
+args = parser.parse_args()
+model = json.loads(Path(args.model).read_text())
 
-xs, ys = make_data(1000, 0.3, seed=42)
+xs, ys = load(args.data, "test")
 result = {**scores(model["w"], model["b"], xs, ys), "hardware": hardware()}
 Path("results").mkdir(exist_ok=True)
 Path("results/eval.json").write_text(json.dumps(result, indent=2))
-print(result)
+print({k: v for k, v in result.items() if k != "hardware"})

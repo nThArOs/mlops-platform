@@ -1,15 +1,13 @@
+import csv
 import os
 import platform
-import random
-
-TRUE_W, TRUE_B = 2.5, -1.0
+from pathlib import Path
 
 
-def make_data(n, noise, seed):
-    rng = random.Random(seed)
-    xs = [rng.uniform(-3, 3) for _ in range(n)]
-    ys = [TRUE_W * x + TRUE_B + rng.gauss(0, noise) for x in xs]
-    return xs, ys
+def load(data_dir, split):
+    with open(Path(data_dir) / split / "data.csv") as f:
+        rows = list(csv.DictReader(f))
+    return [float(r["x"]) for r in rows], [float(r["y"]) for r in rows]
 
 
 def scores(w, b, xs, ys):

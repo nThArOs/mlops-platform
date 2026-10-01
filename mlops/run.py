@@ -9,15 +9,15 @@ from pathlib import Path
 
 import mlflow
 import yaml
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from . import datasets, db, models
+from .config import ROOT, load_config
 from .project import ContractError, Project
 
-ROOT = Path(__file__).resolve().parent.parent
 CONTAINER_RUN_DIR = "/mlops/run"
-
-
-def load_platform_config() -> dict:
-    return yaml.safe_load((ROOT / "configs" / "platform.yaml").read_text(encoding="utf-8"))
+CONTAINER_MODEL_DIR = "/mlops/model"
 
 
 def load_profile(cfg: dict, name: str) -> dict:
@@ -98,9 +98,29 @@ def host_hardware(profile_name: str, profile: dict) -> dict:
     }
 
 
+def save_project(project: Project) -> None:
+    stmt = pg_insert(db.projects).values(
+        name=project.name, root=str(project.root), contract=project.raw)
+    stmt = stmt.on_conflict_do_update(index_elements=["name"], set_={
+        "root": stmt.excluded.root, "contract": stmt.excluded.contract, "updated_at": func.now()})
+    with db.engine().begin() as conn:
+        conn.execute(stmt)
+
+
+def resolve_datasets(project: Project, refs: list[str]) -> list[tuple[dict, str]]:
+    out = []
+    for ref in refs:
+        name, _ = datasets.parse_ref(ref)
+        if name not in project.datasets:
+            declared = ", ".join(project.datasets) or "none"
+            raise ContractError(f"dataset {name} is not declared in project.yaml (declared: {declared})")
+        out.append((datasets.get_version(ref), project.datasets[name].mount))
+    return out
+
+
 def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None = None, config: str | None = None,
-                   values: dict | None = None) -> int:
-    cfg = load_platform_config()
+                   values: dict | None = None, dataset_refs: list[str] | None = None) -> int:
+    cfg = load_config()
     if entrypoint not in project.entrypoints:
         raise ContractError(f"entrypoint not declared: {entrypoint}")
     ep = project.entrypoints[entrypoint]
@@ -109,10 +129,21 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
     if profile.get("runner", "local") != "local":
         raise ContractError(f"runner not supported yet: {profile['runner']}")
 
+    values = dict(values or {})
+    model_ref = values.get("model")
+    registry_model = models.resolve(model_ref) if model_ref and models.is_ref(model_ref) else None
+    mounted = resolve_datasets(project, dataset_refs or [])
+    if len(mounted) == 1:
+        values["dataset"] = mounted[0][0]["name"]
+        values["dataset_path"] = f"{project.workdir}/{mounted[0][1]}"
+
     config = config or ep.config
-    command = render_command(ep.command, {**(values or {}), "config": config, "run_dir": CONTAINER_RUN_DIR})
+    if registry_model:
+        values["model"] = CONTAINER_MODEL_DIR
+    command = render_command(ep.command, {**values, "config": config, "run_dir": CONTAINER_RUN_DIR})
     img_id = image_id(project.image)
     hardware = host_hardware(profile_name, profile)
+    save_project(project)
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", cfg["tracking_uri"]))
     mlflow.set_experiment(project.name)
@@ -122,13 +153,31 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         run_dir = (ROOT / cfg["runs_dir"] / project.name / run_id).resolve()
         run_dir.mkdir(parents=True, exist_ok=True)
 
+        volumes = [
+            "-v", f"{project.root}:{project.workdir}",
+            "-v", f"{run_dir}:{CONTAINER_RUN_DIR}",
+        ]
+        tags = {"image_id": img_id, "estimated": str(not hardware["measured"]), **git_state(project.root)}
+        if registry_model:
+            name, version = registry_model
+            model_path = models.download(name, version, run_dir.parent / f"{run_id}_model")
+            target = CONTAINER_MODEL_DIR + (f"/{model_path.name}" if model_path.is_file() else "")
+            volumes += ["-v", f"{model_path.parent if model_path.is_file() else model_path}:{CONTAINER_MODEL_DIR}:ro"]
+            command = command.replace(CONTAINER_MODEL_DIR, target, 1)
+            tags.update({"model.name": name, "model.version": str(version)})
+        for version, mount in mounted:
+            volumes += ["-v", f"{datasets.checkout(version)}:{project.workdir}/{mount}:ro"]
+            tags[f"dataset.{version['name']}"] = f"v{version['version']}"
+
         params = {
             "entrypoint": entrypoint,
             "command": command,
             "image": project.image,
             "profile": profile_name,
-            **{k: v for k, v in (values or {}).items() if v is not None},
+            **{k: v for k, v in values.items() if v is not None and k != "dataset_path"},
         }
+        if model_ref:
+            params["model"] = model_ref
         if config:
             config_path = project.root / config
             if not config_path.is_file():
@@ -136,37 +185,36 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             params["config"] = config
             params.update(flatten_params(yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}, "config."))
         mlflow.log_params(params)
-        mlflow.set_tags({"image_id": img_id, "estimated": str(not hardware["measured"]), **git_state(project.root)})
+        mlflow.set_tags(tags)
         mlflow.log_dict(hardware, "hardware.json")
         if config:
             mlflow.log_artifact(str(project.root / config), "config")
+        for version, mount in mounted:
+            datasets.link_run(run_id, project.name, entrypoint, version["id"], mount)
 
         container = f"mlops-{run_id[:12]}"
-        docker_cmd = [
-            "docker", "run", "--rm", "--name", container,
-            "-v", f"{project.root}:{project.workdir}",
-            "-v", f"{run_dir}:{CONTAINER_RUN_DIR}",
-            "-w", project.workdir,
-            "-e", f"MLFLOW_TRACKING_URI={cfg['container_tracking_uri']}",
-            "-e", f"MLFLOW_RUN_ID={run_id}",
-            "-e", f"MLOPS_RUN_DIR={CONTAINER_RUN_DIR}",
-            "-e", f"MLOPS_PROFILE={profile_name}",
-            "--entrypoint", "sh",
-        ]
+        docker_cmd = ["docker", "run", "--rm", "--name", container, *volumes, "-w", project.workdir,
+                      "-e", f"MLFLOW_TRACKING_URI={cfg['container_tracking_uri']}",
+                      "-e", f"MLFLOW_RUN_ID={run_id}",
+                      "-e", f"MLOPS_RUN_DIR={CONTAINER_RUN_DIR}",
+                      "-e", f"MLOPS_PROFILE={profile_name}"]
         if profile.get("cpus"):
-            docker_cmd[3:3] = ["--cpus", str(profile["cpus"])]
+            docker_cmd += ["--cpus", str(profile["cpus"])]
         if profile.get("memory"):
-            docker_cmd[3:3] = ["--memory", str(profile["memory"])]
+            docker_cmd += ["--memory", str(profile["memory"])]
         if project.shm_size:
-            docker_cmd[3:3] = ["--shm-size", str(project.shm_size)]
-        docker_cmd += [project.image, "-c", command]
+            docker_cmd += ["--shm-size", str(project.shm_size)]
+        docker_cmd += ["--entrypoint", "sh", project.image, "-c", command]
 
         print(f"run {run_id} ({project.name}/{entrypoint}, profile {profile_name})")
+        for version, mount in mounted:
+            print(f"dataset {version['name']}@v{version['version']} -> {mount}")
+        if registry_model:
+            print(f"model {registry_model[0]}@v{registry_model[1]}")
         print(f"$ {command}")
         started = time.time() - 2
         log_path = run_dir / "stdout.log"
-        status = "FAILED"
-        returncode = 1
+        status, returncode = "FAILED", 1
         try:
             with open(log_path, "w", encoding="utf-8") as log:
                 proc = subprocess.Popen(docker_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -178,8 +226,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             status = "FINISHED" if returncode == 0 else "FAILED"
         except KeyboardInterrupt:
             subprocess.run(["docker", "rm", "-f", container], capture_output=True)
-            status = "KILLED"
-            returncode = 130
+            status, returncode = "KILLED", 130
         duration = time.time() - started - 2
 
         mlflow.log_metric("duration_s", round(duration, 2))
@@ -188,16 +235,18 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
 
         outputs = collect_outputs(project, ep.outputs, started)
         metric_files = outputs.get("metrics", [])
+        all_metrics = {}
         for path in metric_files:
             data = json.loads(path.read_text(encoding="utf-8"))
             metrics = flatten_metrics(data)
             if len(metric_files) > 1:
                 metrics = {f"{path.stem}.{k}": v for k, v in metrics.items()}
-            if metrics:
-                mlflow.log_metrics(metrics)
+            all_metrics.update(metrics)
             if isinstance(data, dict) and isinstance(data.get("hardware"), dict):
                 mlflow.log_dict(data["hardware"], f"hardware_{path.stem}.json")
             mlflow.log_artifact(str(path), "metrics")
+        if all_metrics:
+            mlflow.log_metrics(all_metrics)
         for kind, files in outputs.items():
             if kind == "metrics":
                 continue
@@ -213,6 +262,14 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             mlflow.set_tag("missing_outputs", ",".join(missing))
 
         mlflow.end_run(status)
-        print(f"{status.lower()} in {duration:.1f}s, exit code {returncode}")
-        print(f"{mlflow.get_tracking_uri()}/#/experiments/{run.info.experiment_id}/runs/{run_id}")
+
+    if status == "FINISHED" and outputs.get("model"):
+        version = models.register(project.name, run_id)
+        print(f"registered {project.name}@v{version} (candidate)")
+    if status == "FINISHED" and entrypoint == "evaluate" and registry_model and mounted and all_metrics:
+        models.record_evaluation(registry_model[0], registry_model[1], run_id, [v["id"] for v, _ in mounted],
+                                 all_metrics)
+        print(f"evaluation of {registry_model[0]}@v{registry_model[1]} recorded")
+    print(f"{status.lower()} in {duration:.1f}s, exit code {returncode}")
+    print(f"{cfg['tracking_uri']}/#/experiments/{run.info.experiment_id}/runs/{run_id}")
     return returncode

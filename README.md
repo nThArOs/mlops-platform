@@ -30,6 +30,21 @@ mlops run examples/toy-regression train
 mlops run examples/toy-regression evaluate --model models/model.json --profile edge-small
 ```
 
+Datasets and models:
+
+```bash
+mlops dataset add toy data/raw/toy_v1 --license CC0-1.0 --split train=train --split test=test
+mlops dataset list
+mlops dataset diff toy@v1 toy@v2
+mlops run examples/toy-regression train --dataset toy@v1
+mlops run examples/toy-regression evaluate --model toy-regression@candidate --dataset toy@v1
+mlops model list toy-regression
+mlops model promote toy-regression 2
+mlops model rollback toy-regression
+```
+
+Dataset files are stored once by content hash in `store/`. By default they are hard-linked from the source folder, which makes the source files read-only; `--copy` keeps them editable at the cost of disk space.
+
 Each run is an MLflow run in the experiment named after the project: params (command, config values, profile), tags (image id, Git commit), metrics from the JSON outputs, artifacts (model, metrics, config, stdout, hardware).
 
 Platform settings are in `configs/platform.yaml`, hardware profiles in `configs/hardware_profiles.yaml`. Docker-limited profiles are tagged `estimated`.

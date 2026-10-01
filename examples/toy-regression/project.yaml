@@ -2,13 +2,17 @@ name: toy-regression
 image: mlops-toy-regression:cpu
 task: regression
 
+datasets:
+  - name: toy
+    mount: data/toy
+
 entrypoints:
   train:
-    command: python train.py --config {config}
+    command: python train.py --config {config} --data {dataset_path}
     config: configs/train.yaml
     outputs: { model: models/model.json, metrics: results/train.json }
   evaluate:
-    command: python evaluate.py --model {model}
+    command: python evaluate.py --model {model} --data {dataset_path}
     outputs: { metrics: results/eval.json }
 
 metrics:

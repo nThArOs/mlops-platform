@@ -1,5 +1,7 @@
 tracking_uri: http://localhost:5000
 container_tracking_uri: http://host.docker.internal:5000
+database_url: postgresql+pg8000://mlops:mlops@localhost:5432/platform
+store_dir: store
 profiles_file: configs/hardware_profiles.yaml
 runs_dir: runs
 default_profile: pc-cpu

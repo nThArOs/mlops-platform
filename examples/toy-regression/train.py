@@ -5,20 +5,21 @@ from pathlib import Path
 
 import yaml
 
-from common import hardware, make_data, scores
+from common import hardware, load, scores
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", required=True)
-cfg = yaml.safe_load(Path(parser.parse_args().config).read_text())
+parser.add_argument("--data", required=True)
+args = parser.parse_args()
+cfg = yaml.safe_load(Path(args.config).read_text())
 
-xs, ys = make_data(cfg["samples"], cfg["noise"], cfg["seed"])
-split = int(0.8 * len(xs))
+xs, ys = load(args.data, "train")
+split = int(0.9 * len(xs))
 w, b = 0.0, 0.0
 start = time.time()
 for epoch in range(cfg["epochs"]):
-    n = split
-    gw = sum(2 * (w * x + b - y) * x for x, y in zip(xs[:n], ys[:n])) / n
-    gb = sum(2 * (w * x + b - y) for x, y in zip(xs[:n], ys[:n])) / n
+    gw = sum(2 * (w * x + b - y) * x for x, y in zip(xs[:split], ys[:split])) / split
+    gb = sum(2 * (w * x + b - y) for x, y in zip(xs[:split], ys[:split])) / split
     w -= cfg["lr"] * gw
     b -= cfg["lr"] * gb
     if epoch % 10 == 0 or epoch == cfg["epochs"] - 1:

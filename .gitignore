@@ -7,3 +7,4 @@ data/
 runs/
 mlartifacts/
 *.egg-info/
+store/

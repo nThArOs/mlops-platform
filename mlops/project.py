@@ -20,6 +20,12 @@ class Entrypoint:
 
 
 @dataclass
+class DatasetSlot:
+    name: str
+    mount: str
+
+
+@dataclass
 class Project:
     root: Path
     name: str
@@ -27,6 +33,7 @@ class Project:
     workdir: str
     shm_size: str | None
     entrypoints: dict[str, Entrypoint]
+    datasets: dict[str, DatasetSlot]
     metrics: dict
     raw: dict
 
@@ -55,6 +62,14 @@ def load_project(root: str | Path) -> Project:
     if missing:
         raise ContractError(f"missing entrypoints: {', '.join(missing)}")
 
+    slots = {}
+    for spec in data.get("datasets") or []:
+        if not isinstance(spec, dict) or not spec.get("name") or not spec.get("mount"):
+            raise ContractError("each dataset needs a name and a mount")
+        if spec["mount"].startswith("/") or ".." in Path(spec["mount"]).parts:
+            raise ContractError(f"datasets.{spec['name']}.mount must be relative to the project root")
+        slots[spec["name"]] = DatasetSlot(spec["name"], spec["mount"])
+
     metrics = data["metrics"] or {}
     for key in ("primary", "higher_is_better"):
         if key not in metrics:
@@ -67,6 +82,7 @@ def load_project(root: str | Path) -> Project:
         workdir=data.get("workdir", "/app"),
         shm_size=data.get("shm_size"),
         entrypoints=entrypoints,
+        datasets=slots,
         metrics=metrics,
         raw=data,
     )
