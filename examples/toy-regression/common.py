@@ -1,6 +1,9 @@
 import csv
+import json
 import os
 import platform
+import time
+import urllib.request
 from pathlib import Path
 
 
@@ -21,3 +24,17 @@ def scores(w, b, xs, ys):
 def hardware():
     return {"platform": platform.platform(), "cpu": platform.machine(), "cpu_count": os.cpu_count(),
             "profile": os.environ.get("MLOPS_PROFILE")}
+
+
+def log_metric(key, value, step):
+    """Log to the run created by the platform, if any, through the MLflow REST API."""
+    uri, run_id = os.environ.get("MLFLOW_TRACKING_URI"), os.environ.get("MLFLOW_RUN_ID")
+    if not uri or not run_id:
+        return
+    body = {"run_id": run_id, "key": key, "value": value, "step": step, "timestamp": int(time.time() * 1000)}
+    req = urllib.request.Request(f"{uri}/api/2.0/mlflow/runs/log-metric", json.dumps(body).encode(),
+                                 {"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=5).read()
+    except OSError:
+        pass

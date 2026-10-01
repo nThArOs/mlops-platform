@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from common import hardware, load, scores
+from common import hardware, load, log_metric, scores
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", required=True)
@@ -22,8 +22,12 @@ for epoch in range(cfg["epochs"]):
     gb = sum(2 * (w * x + b - y) for x, y in zip(xs[:split], ys[:split])) / split
     w -= cfg["lr"] * gw
     b -= cfg["lr"] * gb
+    val = scores(w, b, xs[split:], ys[split:])
+    if epoch % 5 == 0 or epoch == cfg["epochs"] - 1:
+        log_metric("val/rmse", val["rmse"], epoch)
+        log_metric("train/rmse", scores(w, b, xs[:split], ys[:split])["rmse"], epoch)
     if epoch % 10 == 0 or epoch == cfg["epochs"] - 1:
-        print(f"epoch {epoch} val_rmse {scores(w, b, xs[split:], ys[split:])['rmse']}")
+        print(f"epoch {epoch} val_rmse {val['rmse']}")
 
 Path("models").mkdir(exist_ok=True)
 Path("results").mkdir(exist_ok=True)

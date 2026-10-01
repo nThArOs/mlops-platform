@@ -221,6 +221,9 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         docker_cmd = ["docker", "run", "--rm", "--name", container, *volumes, "-w", project.workdir,
                       "-e", f"MLFLOW_TRACKING_URI={cfg['container_tracking_uri']}",
                       "-e", f"MLFLOW_RUN_ID={run_id}",
+                      "-e", f"MLFLOW_EXPERIMENT_NAME={project.name}",
+                      "-e", f"MLFLOW_RUN={entrypoint}",
+                      "-e", "MLFLOW_KEEP_RUN_ACTIVE=true",
                       "-e", f"MLOPS_RUN_DIR={CONTAINER_RUN_DIR}",
                       "-e", f"MLOPS_PROFILE={profile_name}"]
         if profile.get("cpus"):

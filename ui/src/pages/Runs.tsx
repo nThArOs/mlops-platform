@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Square } from "lucide-react";
 import { jobs, models, type Job } from "../api";
 import InfoTip from "../components/InfoTip";
+import LineChart from "../components/LineChart";
 import { Badge, Loading, Note, Stat } from "../components/ui";
 import { ago, date } from "../lib/format";
 import { useFetch } from "../lib/useFetch";
@@ -95,6 +96,46 @@ function Log({ job }: { job: Job }) {
   }, [job.id, live]);
 
   return <pre ref={ref} className="panel logs" style={{ maxHeight: 420 }}>{text || (job.status === "queued" ? "Waiting for the previous run to finish." : "No output yet.")}</pre>;
+}
+
+function TrainingCurves({ job }: { job: Job }) {
+  const runId = job.run_id ?? job.result?.run_id;
+  const live = job.status === "running";
+  const curves = useFetch<Record<string, [number, number][]>>(() => (runId ? jobs.curves(runId) : Promise.resolve({})), [runId]);
+  useEffect(() => {
+    if (!live) return;
+    const id = setInterval(curves.reload, 10000);
+    return () => clearInterval(id);
+  }, [live, curves.reload]);
+  const data = curves.data ?? {};
+  const keys = Object.keys(data);
+  if (!keys.length) return null;
+  const pick = (pred: (k: string) => boolean) => keys.filter(pred).slice(0, 3);
+  const groups = [
+    { title: "Training loss", keys: pick((k) => k.startsWith("train/")), format: (v: number) => v.toFixed(2) },
+    { title: "Validation loss", keys: pick((k) => k.startsWith("val/")), format: (v: number) => v.toFixed(2) },
+    { title: "Validation scores", keys: pick((k) => k.startsWith("metrics/") && !k.includes("50-95")), format: (v: number) => v.toFixed(2) },
+  ].filter((g) => g.keys.length);
+  const other = groups.length ? [] : keys.slice(0, 4);
+  const short = (k: string) => k.replace(/^(train|val|metrics)\//, "").replace(/\(B\)|B$/, "");
+  return (
+    <div className="section">
+      <div className="section-head">
+        <h2 className="section-title">Training curves</h2>
+        {live && <span className="faint">updated every 10 seconds</span>}
+      </div>
+      <div className="charts">
+        {groups.map((g) => (
+          <LineChart key={g.title} title={`${g.title}, by epoch`} format={g.format} xFormat={(x) => `epoch ${x + 1}`}
+            series={g.keys.map((k, i) => ({ name: short(k), points: data[k], color: `var(--series-${i + 1})` }))} />
+        ))}
+        {other.map((k) => (
+          <LineChart key={k} title={k} format={(v) => v.toFixed(3)} xFormat={(x) => `step ${x}`}
+            series={[{ name: k, points: data[k], color: "var(--series-1)" }]} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Comparison({ job }: { job: Job }) {
@@ -229,6 +270,7 @@ export function RunPage() {
         </p>
       )}
 
+      {j.entrypoint === "train" && <TrainingCurves job={j} />}
       {evaluated && <Comparison job={j} />}
       {j.entrypoint === "evaluate" && j.status === "finished" && j.spec.model && (
         <p className="muted">Results are on the <Link to={`/models/${j.model}`} style={{ textDecoration: "underline" }}>model page</Link>.</p>

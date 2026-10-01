@@ -347,6 +347,17 @@ def list_projects() -> list[dict]:
     return out
 
 
+def metric_history(run_id: str) -> dict[str, list[list[float]]]:
+    c = client()
+    keys = c.get_run(run_id).data.metrics.keys()
+    out = {}
+    for key in keys:
+        points = sorted((m.step, m.value) for m in c.get_metric_history(run_id, key))
+        if len(points) > 1:
+            out[key] = [[float(s), float(v)] for s, v in points]
+    return out
+
+
 def rename(old: str, new: str) -> None:
     client().rename_registered_model(old, new)
     with db.engine().begin() as conn:

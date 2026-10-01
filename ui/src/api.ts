@@ -274,4 +274,5 @@ export const jobs = {
   get: (id: number) => request<Job>(`/api/jobs/${id}`),
   log: (id: number, offset: number) => request<{ text: string; offset: number }>(`/api/jobs/${id}/log?offset=${offset}`),
   cancel: (id: number) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  curves: (runId: string) => request<Record<string, [number, number][]>>(`/api/runs/${runId}/metrics`),
 };

@@ -294,6 +294,11 @@ def get_job(job_id: int):
     return jobs.get(job_id)
 
 
+@app.get("/api/runs/{run_id}/metrics")
+def run_metrics(run_id: str):
+    return models.metric_history(run_id)
+
+
 @app.get("/api/jobs/{job_id}/log")
 def job_log(job_id: int, offset: int = 0):
     return jobs.log(job_id, offset)
