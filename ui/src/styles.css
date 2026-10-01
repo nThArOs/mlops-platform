@@ -270,7 +270,8 @@ dialog.modal::backdrop { background: var(--overlay); }
 }
 .tip-panel.left { left: -8px; }
 .tip-panel.right { right: -8px; }
-.tip:hover .tip-panel, .tip:focus-within .tip-panel { display: flex; }
+.cm td.tip:hover .tip-panel, .cm td.tip:focus-within .tip-panel { display: flex; }
+.tip-panel.tip-floating { display: flex; position: fixed; z-index: 1000; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
 .tip-title { font-family: var(--font-serif); font-size: 16px; color: var(--text); }
 .tip-formula { color: var(--text); background: var(--surface-2); padding: 6px 8px; border-radius: 6px; font-size: 11.5px; }
 .tip-label { font-family: var(--font-mono); font-size: 12px; fill: var(--text); }
@@ -353,3 +354,7 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .param-name { display: inline-flex; align-items: center; min-width: 0; }
 .param .tip-panel { width: 280px; }
 .field .tip-panel { font-weight: 400; }
+
+.profiles { display: grid; grid-template-columns: 18px minmax(110px, auto) minmax(120px, auto) 1fr; column-gap: 12px; row-gap: 6px; align-items: center; }
+.profile-row { display: contents; font-size: 13px; cursor: pointer; }
+.limits { display: inline-flex; align-items: center; }

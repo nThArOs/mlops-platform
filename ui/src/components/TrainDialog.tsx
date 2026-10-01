@@ -73,10 +73,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
   }, [o]);
 
   const flat = useMemo(() => flatten(base.data?.values ?? {}), [base.data]);
-  const profileDetails = Object.fromEntries((o?.profiles ?? []).map((p) => [p.name, [
-    p.cpus ? `${p.cpus} CPU, ${p.memory}` : "whole machine",
-    constraints[p.name] ? "limits: " + Object.entries(constraints[p.name]).map(([k, v]) => `${k} ${v}`).join(", ") : "",
-  ].filter(Boolean).join(" · ")]));
+  const profiles = (o?.profiles ?? []).map((p) => ({ ...p, limits: constraints[p.name] }));
   useEffect(() => { setValues(Object.fromEntries(Object.entries(flat).map(([k, v]) => [k, show(v)]))); }, [flat]);
 
   useEffect(() => {
@@ -221,7 +218,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
               ))}
             </div>
           )}
-          <ProfilePicker profiles={o.profiles.map((p) => p.name)} picked={bench} onChange={setBench} details={profileDetails} />
+          <ProfilePicker profiles={profiles} picked={bench} onChange={setBench} />
           {error && <Note kind="error">{error}</Note>}
         </>
       )}

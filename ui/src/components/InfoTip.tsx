@@ -1,5 +1,10 @@
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { lookup } from "../lib/glossary";
+
+const WIDTH = 280;
+const GAP = 8;
 
 function PrDiagram() {
   return (
@@ -18,21 +23,44 @@ function PrDiagram() {
   );
 }
 
-export function Help({ title, children, align = "left" }: { title: string; children: React.ReactNode; align?: "left" | "right" }) {
+/** Info icon whose panel floats above the page, so opening it never moves the layout. */
+export function Help({ title, children }: { title: string; children: ReactNode; align?: "left" | "right" }) {
+  const button = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !button.current) return;
+    const r = button.current.getBoundingClientRect();
+    const height = panel.current?.offsetHeight ?? 0;
+    const left = Math.min(Math.max(8, r.left - 12), window.innerWidth - WIDTH - 8);
+    const below = r.bottom + GAP;
+    const top = below + height > window.innerHeight - 8 && r.top - GAP - height > 8 ? r.top - GAP - height : below;
+    setPos({ left, top });
+  }, [open]);
+
+  const host = button.current?.closest("dialog") ?? document.body;
   return (
     <span className="tip" onClick={(e) => e.preventDefault()}>
-      <button type="button" className="tip-btn" aria-label={`About ${title}`}>
+      <button ref={button} type="button" className="tip-btn" aria-label={`About ${title}`} aria-expanded={open}
+        onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>
         <Info size={13} strokeWidth={1.8} />
       </button>
-      <span role="tooltip" className={`tip-panel ${align}`}>
-        <span className="tip-title">{title}</span>
-        {children}
-      </span>
+      {open && createPortal(
+        <span ref={panel} role="tooltip" className="tip-panel tip-floating"
+          style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: WIDTH }}>
+          <span className="tip-title">{title}</span>
+          {children}
+        </span>,
+        host,
+      )}
     </span>
   );
 }
 
-export default function InfoTip({ metric, custom, align = "left" }: {
+export default function InfoTip({ metric, custom }: {
   metric: string;
   custom?: Record<string, string>;
   align?: "left" | "right";
@@ -40,17 +68,11 @@ export default function InfoTip({ metric, custom, align = "left" }: {
   const entry = lookup(metric, custom);
   if (!entry) return null;
   return (
-    <span className="tip">
-      <button type="button" className="tip-btn" aria-label={`About ${entry.title}`}>
-        <Info size={13} strokeWidth={1.8} />
-      </button>
-      <span role="tooltip" className={`tip-panel ${align}`}>
-        <span className="tip-title">{entry.title}</span>
-        <span>{entry.what}</span>
-        {entry.diagram === "pr" && <PrDiagram />}
-        {entry.formula && <span className="tip-formula mono">{entry.formula}</span>}
-        {entry.better && <span className="faint">{entry.better === "higher" ? "Higher is better." : "Lower is better."}</span>}
-      </span>
-    </span>
+    <Help title={entry.title}>
+      <span>{entry.what}</span>
+      {entry.diagram === "pr" && <PrDiagram />}
+      {entry.formula && <span className="tip-formula mono">{entry.formula}</span>}
+      {entry.better && <span className="faint">{entry.better === "higher" ? "Higher is better." : "Lower is better."}</span>}
+    </Help>
   );
 }

@@ -122,7 +122,8 @@ function ExportDialog({ meta, versions, onClose }: { meta: ModelSummary; version
         <input type="checkbox" checked={evaluate} onChange={(e) => setEvaluate(e.target.checked)} />
         Evaluate on the datasets production was evaluated on
       </label>
-      <ProfilePicker profiles={options.data?.profiles.map((p) => p.name) ?? []} picked={bench} onChange={setBench} />
+      <ProfilePicker profiles={(options.data?.profiles ?? []).map((p) => ({ ...p, limits: meta.constraints[p.name] }))}
+        picked={bench} onChange={setBench} />
       {error && <Note kind="error">{error}</Note>}
     </Modal>
   );
@@ -136,22 +137,39 @@ export const BENCHMARK_HELP = (
   </>
 );
 
-export function ProfilePicker({ profiles, picked, onChange, details }: {
-  profiles: string[];
+export type ProfileInfo = { name: string; cpus?: number; memory?: string; limits?: Record<string, number> };
+
+function memory(m?: string): string {
+  const v = m?.match(/^(\d+(?:\.\d+)?)\s*([gmk])b?$/i);
+  return v ? `${v[1]} ${v[2].toUpperCase()}B` : m ?? "";
+}
+
+export function ProfilePicker({ profiles, picked, onChange }: {
+  profiles: ProfileInfo[];
   picked: string[];
   onChange: (p: string[]) => void;
-  details?: Record<string, string>;
 }) {
   return (
     <div className="field">
       <span className="field-label">Benchmark on<Help title="Benchmark">{BENCHMARK_HELP}</Help></span>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-        {profiles.map((name) => (
-          <label key={name} className="check">
-            <input type="checkbox" checked={picked.includes(name)}
-              onChange={(e) => onChange(e.target.checked ? [...picked, name] : picked.filter((x) => x !== name))} />
-            <span className="mono">{name}</span>
-            {details?.[name] && <span className="faint" style={{ fontSize: 12 }}>{details[name]}</span>}
+      <div className="profiles">
+        {profiles.map((p) => (
+          <label key={p.name} className="profile-row">
+            <input type="checkbox" checked={picked.includes(p.name)}
+              onChange={(e) => onChange(e.target.checked ? [...picked, p.name] : picked.filter((x) => x !== p.name))} />
+            <span className="mono">{p.name}</span>
+            <span className="faint mono">{p.cpus ? `${p.cpus} CPU · ${memory(p.memory)}` : "whole machine"}</span>
+            <span>
+              {p.limits && Object.keys(p.limits).length > 0 && (
+                <span className="limits">
+                  <Badge>limits</Badge>
+                  <Help title={`Limits on ${p.name}`}>
+                    {Object.entries(p.limits).map(([k, v]) => <span key={k} className="mono">{k} ≤ {v}</span>)}
+                    <span className="faint">A version that exceeds them can't be promoted.</span>
+                  </Help>
+                </span>
+              )}
+            </span>
           </label>
         ))}
       </div>
