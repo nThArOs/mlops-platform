@@ -51,7 +51,17 @@ Dataset files are stored once by content hash in `store/`. By default they are h
 mlops api
 ```
 
-Serves the API on http://localhost:8000/api (docs at `/api/docs`) and the web UI on http://localhost:8000 once built. It runs on the host, not in Docker, to read dataset folders and hard-link them into the store.
+Serves the API on http://localhost:8000/api (docs at `/api/docs`) and the web UI on http://localhost:8000 once built.
+
+## UI
+
+```bash
+cd ui
+npm install
+npm run build
+```
+
+The build in `ui/dist` is served by `mlops api`. For development, `npm run dev` serves the UI on http://localhost:3000 with `/api` proxied to the API. It runs on the host, not in Docker, to read dataset folders and hard-link them into the store.
 
 Each run is an MLflow run in the experiment named after the project: params (command, config values, profile), tags (image id, Git commit), metrics from the JSON outputs, artifacts (model, metrics, config, stdout, hardware).
 
