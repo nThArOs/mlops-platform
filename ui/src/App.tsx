@@ -5,6 +5,7 @@ import DatasetPage from "./pages/Dataset";
 import ModelsPage from "./pages/Models";
 import ModelPage from "./pages/Model";
 import { ProductionList, ProductionService } from "./pages/Production";
+import { RunPage, RunsList } from "./pages/Runs";
 import Upcoming from "./pages/Upcoming";
 
 export default function App() {
@@ -17,6 +18,8 @@ export default function App() {
         <Route path="datasets/:name/v/:version" element={<DatasetPage />} />
         <Route path="models" element={<ModelsPage />} />
         <Route path="models/:project" element={<ModelPage />} />
+        <Route path="runs" element={<RunsList />} />
+        <Route path="runs/:id" element={<RunPage />} />
         <Route path="production" element={<ProductionList />} />
         <Route path="production/:project" element={<ProductionService />} />
         <Route path="*" element={<Upcoming title="Not found" />} />

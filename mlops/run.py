@@ -18,6 +18,7 @@ from .project import ContractError, Project, split_key
 
 CONTAINER_RUN_DIR = "/mlops/run"
 CONTAINER_MODEL_DIR = "/mlops/model"
+CONTAINER_CONFIG_DIR = "/mlops/config"
 
 
 def load_profile(cfg: dict, name: str) -> dict:
@@ -151,6 +152,14 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         values["dataset_path"] = f"{project.workdir}/{mounted[0][1]}"
 
     config = config or ep.config
+    external_config = Path(config) if config and Path(config).is_absolute() else None
+    if external_config:
+        if not external_config.is_file():
+            raise ContractError(f"config not found: {external_config}")
+        config_host = external_config
+        config = f"{CONTAINER_CONFIG_DIR}/{external_config.name}"
+    else:
+        config_host = project.root / config if config else None
     if registry_model:
         values["model"] = CONTAINER_MODEL_DIR
     command = render_command(ep.command, {**values, "config": config, "run_dir": CONTAINER_RUN_DIR})
@@ -182,6 +191,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             tags.update({"model.name": name, "model.version": str(version)})
         for version, mount in mounted:
             volumes += ["-v", f"{datasets.checkout(version)}:{project.workdir}/{mount}:ro"]
+        if external_config:
+            volumes += ["-v", f"{external_config.parent}:{CONTAINER_CONFIG_DIR}:ro"]
             tags[f"dataset.{version['name']}"] = f"v{version['version']}"
 
         params = {
@@ -194,16 +205,15 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         if model_ref:
             params["model"] = model_ref
         if config:
-            config_path = project.root / config
-            if not config_path.is_file():
-                raise ContractError(f"config not found: {config_path}")
-            params["config"] = config
-            params.update(flatten_params(yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}, "config."))
+            if not config_host.is_file():
+                raise ContractError(f"config not found: {config_host}")
+            params["config"] = str(external_config) if external_config else config
+            params.update(flatten_params(yaml.safe_load(config_host.read_text(encoding="utf-8")) or {}, "config."))
         mlflow.log_params(params)
         mlflow.set_tags(tags)
         mlflow.log_dict(hardware, "hardware.json")
         if config:
-            mlflow.log_artifact(str(project.root / config), "config")
+            mlflow.log_artifact(str(config_host), "config")
         for version, mount in mounted:
             datasets.link_run(run_id, project.name, entrypoint, version["id"], mount)
 
@@ -283,7 +293,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         mlflow.end_run(status)
 
     if status == "FINISHED" and outputs.get("model"):
-        version = models.register(key, run_id, variant or (Path(config).stem if config else None))
+        version = models.register(key, run_id, variant or (config_host.stem if config_host else None))
         print(f"registered {key}@v{version} (candidate)")
     if status == "FINISHED" and entrypoint == "evaluate" and registry_model and mounted and all_metrics:
         models.record_evaluation(registry_model[0], registry_model[1], run_id, [v["id"] for v, _ in mounted],

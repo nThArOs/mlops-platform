@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, ExternalLink, RotateCcw } from "lucide-react";
+import { ArrowLeft, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { models, type ModelEvent, type ModelSummary } from "../api";
 import ConfusionMatrix from "../components/ConfusionMatrix";
 import InfoTip from "../components/InfoTip";
+import TrainDialog from "../components/TrainDialog";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
 import { date } from "../lib/format";
 import { useFetch } from "../lib/useFetch";
@@ -16,7 +17,7 @@ function statusBadge(status: string) {
   return <Badge>{status || "registered"}</Badge>;
 }
 
-function PromoteDialog({ project, version, dataset, onClose, onDone }: {
+export function PromoteDialog({ project, version, dataset, onClose, onDone }: {
   project: string;
   version: number;
   dataset: string | null;
@@ -140,6 +141,7 @@ export default function ModelPage() {
   const [rollingBack, setRollingBack] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [cmVersion, setCmVersion] = useState<number | null>(null);
+  const [training, setTraining] = useState(false);
 
   const meta: ModelSummary | undefined = summary.data?.find((m) => m.name === project);
   const versions = detail.data?.versions ?? [];
@@ -201,6 +203,7 @@ export default function ModelPage() {
         <div style={{ display: "flex", gap: 8 }}>
           {detail.data!.production && <Link className="btn" to={`/production/${project}`}>Production</Link>}
           {canRollback && <button className="btn" onClick={() => setRollingBack(true)}><RotateCcw size={14} /> Roll back</button>}
+          {meta && <button className="btn primary" onClick={() => setTraining(true)}><Play size={13} /> Train</button>}
         </div>
       </div>
 
@@ -290,6 +293,7 @@ export default function ModelPage() {
           dataset={dataset && versions.find((v) => v.version === promoting)?.evaluations[dataset] ? dataset : null}
           onClose={() => setPromoting(null)} onDone={done} />
       )}
+      {training && meta && <TrainDialog project={meta.project} slot={meta.slot} onClose={() => setTraining(false)} />}
       {rollingBack && <RollbackDialog project={project} onClose={() => setRollingBack(false)} onDone={done} />}
     </>
   );

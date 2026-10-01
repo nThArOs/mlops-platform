@@ -70,6 +70,23 @@ model_evaluations = sa.Table(
     _created(),
 )
 
+jobs = sa.Table(
+    "jobs", metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("project", sa.String(100), nullable=False),
+    sa.Column("model", sa.String(200), nullable=False),
+    sa.Column("entrypoint", sa.String(50), nullable=False),
+    sa.Column("spec", sa.JSON, nullable=False),
+    sa.Column("status", sa.String(20), nullable=False, server_default="queued"),
+    sa.Column("run_id", sa.String(32)),
+    sa.Column("result", sa.JSON),
+    sa.Column("error", sa.Text),
+    sa.Column("parent_id", sa.ForeignKey("jobs.id")),
+    _created(),
+    sa.Column("started_at", sa.DateTime(timezone=True)),
+    sa.Column("finished_at", sa.DateTime(timezone=True)),
+)
+
 MIGRATIONS = [
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS confusion JSON",
 ]

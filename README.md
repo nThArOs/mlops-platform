@@ -65,6 +65,14 @@ mlops serve stop toy-regression
 
 Dataset files are stored once by content hash in `store/`. Files matching `dataset_ignore` in `configs/platform.yaml` (caches, OS files) are skipped. By default they are hard-linked from the source folder, which makes the source files read-only; `--copy` keeps them editable at the cost of disk space.
 
+## Jobs
+
+```bash
+mlops worker
+```
+
+Runs the trainings and evaluations queued from the UI, one at a time. It is a separate process, so restarting the API never stops a running job. A training can override any value of its config, choose dataset versions and a hardware profile, and queue an evaluation of the new version on the datasets production was evaluated on.
+
 ## API
 
 ```bash

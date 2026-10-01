@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Activity, Box, Database, Moon, Sun } from "lucide-react";
+import { Activity, Box, Database, ListChecks, Moon, Sun } from "lucide-react";
 
 type Theme = "light" | "dark";
 
@@ -17,6 +17,7 @@ function initialTheme(): Theme {
 const nav: { to: string; label: string; icon: typeof Box; soon?: boolean }[] = [
   { to: "/datasets", label: "Datasets", icon: Database },
   { to: "/models", label: "Models", icon: Box },
+  { to: "/runs", label: "Runs", icon: ListChecks },
   { to: "/production", label: "Production", icon: Activity },
 ];
 

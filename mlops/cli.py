@@ -62,6 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("stop", "status", "logs"):
         sv.add_parser(name).add_argument("project")
 
+    sub.add_parser("worker", help="run queued jobs one at a time")
+
     p = sub.add_parser("api", help="start the platform API and UI")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -248,6 +250,11 @@ def main(argv=None) -> int:
             return model_command(args)
         if args.cmd == "serve":
             return serve_command(args)
+        if args.cmd == "worker":
+            from .jobs import work
+
+            work()
+            return 0
         if args.cmd == "api":
             import uvicorn
 

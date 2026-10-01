@@ -4,12 +4,16 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+import yaml
+
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import datasets, deploy, models
+from . import datasets, deploy, jobs, models
+from .project import load_project
+from .run import load_profile
 from .config import ROOT, load_config, resolve
 from .project import ContractError
 from .store import rmtree
@@ -222,6 +226,82 @@ def service_frame(project: str, view: str = "input", width: int = 960):
 @app.get("/api/production/{project}/logs")
 def service_logs(project: str, tail: int = 200):
     return {"logs": deploy.logs(project, min(tail, 2000))}
+
+
+@app.get("/api/projects/{project}/options")
+def project_options(project: str):
+    spec = load_project(jobs.project_root(project))
+    cfg = load_config()
+    profiles = yaml.safe_load((ROOT / cfg["profiles_file"]).read_text(encoding="utf-8"))["profiles"]
+    slots = []
+    for name, d in spec.datasets.items():
+        try:
+            versions = [v["version"] for v in datasets.list_versions(name) if not v["archived"]]
+        except Exception:
+            versions = []
+        slots.append({"name": name, "mount": d.mount, "versions": versions})
+    configs = sorted(p.relative_to(spec.root).as_posix() for p in (spec.root / "configs").glob("*.y*ml"))         if (spec.root / "configs").is_dir() else []
+    return {
+        "project": spec.name,
+        "models": [{"slot": s.name, "key": spec.model_key(s.name), "description": s.description}
+                   for s in spec.models.values()] or [{"slot": None, "key": spec.name, "description": None}],
+        "entrypoints": {n: {"config": e.config} for n, e in spec.entrypoints.items()},
+        "datasets": slots,
+        "configs": configs,
+        "profiles": [{"name": n, **p} for n, p in profiles.items()],
+        "default_profile": cfg["default_profile"],
+    }
+
+
+@app.get("/api/projects/{project}/config")
+def project_config(project: str, path: str):
+    root = jobs.project_root(project).resolve()
+    target = (root / path).resolve()
+    if not target.is_relative_to(root) or not target.is_file():
+        raise HTTPException(404, "config not found")
+    return yaml.safe_load(target.read_text(encoding="utf-8")) or {}
+
+
+class JobSpec(BaseModel):
+    project: str
+    slot: str | None = None
+    entrypoint: str = "train"
+    config: str | None = None
+    params: dict = {}
+    datasets: list[str] = []
+    profile: str | None = None
+    variant: str | None = None
+    model: str | None = None
+    auto_evaluate: bool = False
+    eval_datasets: list[str] = []
+    note: str | None = None
+
+
+@app.post("/api/jobs")
+def create_job(body: JobSpec):
+    if body.profile:
+        load_profile(load_config(), body.profile)
+    return jobs.get(jobs.create(body.model_dump()))
+
+
+@app.get("/api/jobs")
+def list_jobs(model: str | None = None, limit: int = 50):
+    return jobs.list_jobs(model, min(limit, 200))
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: int):
+    return jobs.get(job_id)
+
+
+@app.get("/api/jobs/{job_id}/log")
+def job_log(job_id: int, offset: int = 0):
+    return jobs.log(job_id, offset)
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: int):
+    return jobs.cancel(job_id)
 
 
 UI_DIST = ROOT / "ui" / "dist"
