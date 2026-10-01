@@ -7,6 +7,7 @@ import InfoTip from "../components/InfoTip";
 import LineChart from "../components/LineChart";
 import { Badge, Loading, Note, Stat } from "../components/ui";
 import { ago } from "../lib/format";
+import { lookup } from "../lib/glossary";
 import * as health from "../lib/health";
 import { useFetch } from "../lib/useFetch";
 
@@ -95,6 +96,13 @@ function EvaluatedQuality({ project, version }: { project: string; version: numb
   if (!current) {
     return <p className="muted">v{version} has never been evaluated. Run its evaluate entrypoint to see its accuracy here.</p>;
   }
+  const vsBest = (k: string) => {
+    const better = k === meta.primary ? (meta.higher_is_better ? "higher" : "lower") : lookup(k)?.better ?? "higher";
+    const others = detail.data!.versions.filter((v) => v.evaluations[current]?.[k] !== undefined);
+    if (others.length < 2) return undefined;
+    const top = others.reduce((a, v) => (health.gain(v.evaluations[current][k], a.evaluations[current][k], better) > 0 ? v : a));
+    return health.againstBest(evals[current][k], top.evaluations[current][k], top.version, better);
+  };
   const keys = [meta.primary, ...meta.watch.filter((k) => k !== meta.primary)].filter((k) => evals[current][k] !== undefined).slice(0, 6);
   return (
     <div>
@@ -110,7 +118,8 @@ function EvaluatedQuality({ project, version }: { project: string; version: numb
       <div className="stats">
         {keys.map((k) => (
           <Stat key={k} label={<>{k.replace(/^mean\./, "")}<InfoTip metric={k} custom={meta.descriptions} /></>}
-            value={evals[current][k].toFixed(Math.abs(evals[current][k]) >= 100 ? 0 : 2)} />
+            value={evals[current][k].toFixed(Math.abs(evals[current][k]) >= 100 ? 0 : 2)}
+            health={vsBest(k)} />
         ))}
       </div>
     </div>

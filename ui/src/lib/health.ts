@@ -34,3 +34,23 @@ export function throughput(fps: number, min?: number): Health | undefined {
   if (!min) return undefined;
   return { tone: fps >= min ? "good" : fps >= 0.8 * min ? "warning" : "danger", note: `target ${min} fps` };
 }
+
+// Signed relative gain of a metric over a reference, positive when better.
+export function gain(value: number, ref: number, better: "higher" | "lower" = "higher"): number {
+  const g = (value - ref) / Math.max(Math.abs(ref), 1e-9);
+  return better === "higher" ? g : -g;
+}
+
+export const TOLERANCE = 0.02;
+
+export function versus(value: number, ref: number, better: "higher" | "lower" = "higher"): Tone | undefined {
+  const g = gain(value, ref, better);
+  return g > TOLERANCE ? "good" : g < -TOLERANCE ? "danger" : undefined;
+}
+
+// How far a metric is from the best version: the best or close to it is fine, then tight, then behind.
+export function againstBest(value: number, best: number, version: number | undefined, better: "higher" | "lower" = "higher"): Health {
+  const g = gain(value, best, better);
+  if (g >= -TOLERANCE) return { tone: "good", note: "best of the versions" };
+  return { tone: g >= -0.1 ? "warning" : "danger", note: `v${version} is ${Math.round(-g * 100)} % better` };
+}

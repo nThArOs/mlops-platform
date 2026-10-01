@@ -283,7 +283,8 @@ dialog.modal::backdrop { background: var(--overlay); }
   display: block; width: fit-content; margin: 0 auto 2px; padding: 0 7px; border-radius: 999px;
   font-size: 10.5px; font-family: var(--font-mono); background: color-mix(in srgb, currentColor 14%, transparent);
 }
-.cm td { min-width: 112px; height: 60px; }
+.cm td { min-width: 150px; height: 84px; font-size: 15px; }
+.cm th { font-size: 13px; }
 
 .cm-layout { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
 .cm td.lit { outline: 2px solid var(--text); outline-offset: -2px; }
@@ -376,3 +377,6 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .stat.warning .stat-dot { background: var(--warning); }
 .stat.danger .stat-dot { background: var(--danger); }
 .stat.danger .stat-note { color: var(--danger); }
+
+td.num.good { background: var(--success-bg); color: var(--success); }
+td.num.danger { background: var(--danger-bg); color: var(--danger); }

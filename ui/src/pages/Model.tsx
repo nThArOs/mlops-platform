@@ -10,6 +10,8 @@ import ProgressBar from "../components/Progress";
 import TrainDialog from "../components/TrainDialog";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
 import { date } from "../lib/format";
+import { lookup } from "../lib/glossary";
+import * as health from "../lib/health";
 import { useFetch } from "../lib/useFetch";
 
 const metric = (v: number | undefined) => (v === undefined ? "–" : Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(4));
@@ -261,6 +263,7 @@ export default function ModelPage() {
   const watched = (meta?.watch ?? []).filter((k) => k !== primary && available.has(k));
   const others = (watched.length ? watched : [...available].filter((k) => k !== primary)).slice(0, 4);
   const withCm = dataset ? versions.filter((v) => v.evaluations[dataset]) : [];
+  const prodEval = dataset ? versions.find((v) => v.version === detail.data!.production)?.evaluations[dataset] : undefined;
   const cmShown = withCm.find((v) => v.version === cmVersion)
     ?? withCm.find((v) => v.version === detail.data!.production) ?? withCm[withCm.length - 1];
   const canRollback = detail.data!.history.some((e) => e.to_version === detail.data!.production && e.from_version);
@@ -329,6 +332,12 @@ export default function ModelPage() {
           {[...versions].reverse().map((v) => {
             const m = dataset ? v.evaluations[dataset] : undefined;
             const value = m?.[primary];
+            const tone = (k: string, better?: "higher" | "lower") => {
+              const x = m?.[k];
+              const ref = prodEval?.[k];
+              if (x === undefined || ref === undefined || v.version === detail.data!.production) return "";
+              return health.versus(x, ref, better ?? lookup(k)?.better ?? "higher") ?? "";
+            };
             return (
               <tr key={v.version}>
                 <td className="mono" title={v.description ?? undefined}>v{v.version}</td>
@@ -344,12 +353,13 @@ export default function ModelPage() {
                     return <Link key={ref} to={`/datasets/${n}/v/${ver}`} className="mono" style={{ marginRight: 8, textDecoration: "underline", textDecorationColor: "var(--border-strong)" }}>{ref}</Link>;
                   })}
                 </td>
-                <td className="num mono" style={{ fontWeight: value !== undefined && value === best ? 600 : 400 }}>
+                <td className={`num mono ${tone(primary, meta?.higher_is_better === false ? "lower" : "higher")}`}
+                  style={{ fontWeight: value !== undefined && value === best ? 600 : 400 }}>
                   {value === undefined ? <span className="faint">not evaluated</span> : metric(value)}
                   <Interval range={dataset ? v.extras?.[dataset]?.intervals?.[primary] : undefined} />
                 </td>
                 {others.map((k) => (
-                  <td key={k} className="num mono muted">
+                  <td key={k} className={`num mono muted ${tone(k)}`}>
                     {metric(m?.[k])}
                     <Interval range={dataset ? v.extras?.[dataset]?.intervals?.[k] : undefined} />
                   </td>
