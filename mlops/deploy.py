@@ -12,14 +12,14 @@ import sqlalchemy as sa
 
 from . import db, models
 from .config import load_config, resolve
-from .project import ContractError, load_project
+from .project import ContractError, load_project, split_key
 from .run import CONTAINER_MODEL_DIR, image_id, load_profile, render_command
 
 LABEL = "mlops.project"
 
 
-def container_name(project: str) -> str:
-    return f"mlops-serve-{project}"
+def container_name(key: str) -> str:
+    return "mlops-serve-" + key.replace(".", "-")
 
 
 def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -29,7 +29,8 @@ def docker(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return r
 
 
-def project_root(project: str) -> Path:
+def project_root(key: str) -> Path:
+    project, _ = split_key(key)
     with db.engine().connect() as conn:
         root = conn.execute(sa.select(db.projects.c.root).where(db.projects.c.name == project)).scalar()
     if root is None:
@@ -112,6 +113,9 @@ def _event(project: str, action: str, version: int, previous: int | None = None,
 def start(project: str, version: int | None = None, profile_name: str | None = None) -> dict:
     cfg = load_config()
     spec = load_project(project_root(project))
+    _, slot = split_key(project)
+    if spec.model_key(slot) != project:
+        raise ContractError(f"unknown model: {project}")
     ep = spec.entrypoints.get("serve")
     if ep is None or not ep.port:
         raise ContractError(f"{project} has no serve entrypoint with a port")
@@ -120,15 +124,16 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
         raise ContractError(f"{project} has no production version")
     profile_name = profile_name or cfg["default_profile"]
     profile = load_profile(cfg, profile_name)
-    image_id(spec.image)
+    image = spec.image_for(slot)
+    image_id(image)
 
-    model_dir = resolve(cfg["runs_dir"]) / "serve" / project / f"v{version}"
+    model_dir = resolve(cfg["runs_dir"]) / "serve" / project.replace(".", "-") / f"v{version}"
     if model_dir.exists():
         shutil.rmtree(model_dir)
     model_path = models.download(project, version, model_dir)
     target = CONTAINER_MODEL_DIR + (f"/{model_path.name}" if model_path.is_file() else "")
     mount = model_path.parent if model_path.is_file() else model_path
-    command = render_command(ep.command, {"model": target, "port": ep.port})
+    command = render_command(ep.command, {**spec.slot_vars(slot), "model": target, "port": ep.port})
 
     previous = status(project)
     docker("rm", "-f", container_name(project), check=False)
@@ -142,7 +147,7 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
         args += ["--cpus", str(profile["cpus"])]
     if profile.get("memory"):
         args += ["--memory", str(profile["memory"])]
-    args += ["--entrypoint", "sh", spec.image, "-c", command]
+    args += ["--entrypoint", "sh", image, "-c", command]
     docker(*args)
     write_targets()
     _event(project, "start", version, previous.get("version"))
@@ -173,8 +178,10 @@ def deployments() -> list[dict]:
     out = []
     for name in names:
         spec = load_project(project_root(name))
-        out.append({**status(name), "servable": "serve" in spec.entrypoints,
-                    "production": models.production_version(name)})
+        for slot in spec.models or [None]:
+            key = spec.model_key(slot)
+            out.append({**status(key), "servable": "serve" in spec.entrypoints,
+                        "production": models.production_version(key)})
     return out
 
 

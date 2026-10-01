@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from . import datasets, db, models
 from .config import ROOT, load_config
-from .project import ContractError, Project
+from .project import ContractError, Project, split_key
 
 CONTAINER_RUN_DIR = "/mlops/run"
 CONTAINER_MODEL_DIR = "/mlops/model"
@@ -121,7 +121,8 @@ def resolve_datasets(project: Project, refs: list[str]) -> list[tuple[dict, str]
 
 
 def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None = None, config: str | None = None,
-                   values: dict | None = None, dataset_refs: list[str] | None = None) -> int:
+                   values: dict | None = None, dataset_refs: list[str] | None = None, slot: str | None = None,
+                   variant: str | None = None) -> int:
     cfg = load_config()
     if entrypoint not in project.entrypoints:
         raise ContractError(f"entrypoint not declared: {entrypoint}")
@@ -134,6 +135,16 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
     values = dict(values or {})
     model_ref = values.get("model")
     registry_model = models.resolve(model_ref) if model_ref and models.is_ref(model_ref) else None
+    if registry_model:
+        ref_project, ref_slot = split_key(registry_model[0])
+        if ref_project != project.name:
+            raise ContractError(f"{model_ref} belongs to {ref_project}, not {project.name}")
+        if slot and ref_slot != slot:
+            raise ContractError(f"{model_ref} is not a {slot} model")
+        slot = ref_slot
+    key = project.model_key(slot)
+    slot_vars = project.slot_vars(slot)
+    values = {**slot_vars, **values}
     mounted = resolve_datasets(project, dataset_refs or [])
     if len(mounted) == 1:
         values["dataset"] = mounted[0][0]["name"]
@@ -143,7 +154,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
     if registry_model:
         values["model"] = CONTAINER_MODEL_DIR
     command = render_command(ep.command, {**values, "config": config, "run_dir": CONTAINER_RUN_DIR})
-    img_id = image_id(project.image)
+    image = project.image_for(slot)
+    img_id = image_id(image)
     hardware = host_hardware(profile_name, profile)
     save_project(project)
 
@@ -159,7 +171,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             "-v", f"{project.root}:{project.workdir}",
             "-v", f"{run_dir}:{CONTAINER_RUN_DIR}",
         ]
-        tags = {"image_id": img_id, "estimated": str(not hardware["measured"]), **git_state(project.root)}
+        tags = {"image_id": img_id, "estimated": str(not hardware["measured"]), "mlops.model": key,
+                **git_state(project.root)}
         if registry_model:
             name, version = registry_model
             model_path = models.download(name, version, run_dir.parent / f"{run_id}_model")
@@ -174,7 +187,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         params = {
             "entrypoint": entrypoint,
             "command": command,
-            "image": project.image,
+            "image": image,
             "profile": profile_name,
             **{k: v for k, v in values.items() if v is not None and k != "dataset_path"},
         }
@@ -206,7 +219,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             docker_cmd += ["--memory", str(profile["memory"])]
         if project.shm_size:
             docker_cmd += ["--shm-size", str(project.shm_size)]
-        docker_cmd += ["--entrypoint", "sh", project.image, "-c", command]
+        docker_cmd += ["--entrypoint", "sh", image, "-c", command]
 
         print(f"run {run_id} ({project.name}/{entrypoint}, profile {profile_name})")
         for version, mount in mounted:
@@ -237,7 +250,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         mlflow.set_tag("exit_code", str(returncode))
         mlflow.log_artifact(str(log_path))
 
-        outputs = collect_outputs(project, ep.outputs, started)
+        outputs = collect_outputs(project, {k: render_command(v, slot_vars) for k, v in ep.outputs.items()}, started)
         metric_files = outputs.get("metrics", [])
         all_metrics, confusion = {}, None
         for path in metric_files:
@@ -270,8 +283,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         mlflow.end_run(status)
 
     if status == "FINISHED" and outputs.get("model"):
-        version = models.register(project.name, run_id)
-        print(f"registered {project.name}@v{version} (candidate)")
+        version = models.register(key, run_id, variant or (Path(config).stem if config else None))
+        print(f"registered {key}@v{version} (candidate)")
     if status == "FINISHED" and entrypoint == "evaluate" and registry_model and mounted and all_metrics:
         models.record_evaluation(registry_model[0], registry_model[1], run_id, [v["id"] for v, _ in mounted],
                                  all_metrics, confusion)

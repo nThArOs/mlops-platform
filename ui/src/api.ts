@@ -114,6 +114,9 @@ export const api = {
 
 export type ModelSummary = {
   name: string;
+  project: string;
+  slot: string | null;
+  description: string | null;
   task: string | null;
   primary: string;
   higher_is_better: boolean;
@@ -127,6 +130,8 @@ export type ModelSummary = {
 export type ModelVersion = {
   version: number;
   status: string;
+  variant: string | null;
+  description: string | null;
   aliases: string[];
   run_id: string;
   trained_on: string[];

@@ -18,25 +18,33 @@ datasets:
   - name: dut_anti_uav_yolo
     mount: data/yolo/dut_anti_uav
 
+models:
+  residual:
+    description: Detector on motion-compensated residuals, decoded from the compressed stream
+    vars: { input: residual }
+  rgb:
+    description: Detector on fully decoded RGB frames, the baseline
+    vars: { input: rgb }
+
 entrypoints:
   train:
-    command: python scripts/train_yolo.py dut_anti_uav residual --config {config} --tag platform
+    command: python scripts/train_yolo.py dut_anti_uav {input} --config {config} --tag platform
     config: configs/train.yaml
-    outputs: { model: models/dut_anti_uav_residual_platform.pt, metrics: results/detect_dut_anti_uav_residual_platform.json }
+    outputs: { model: "models/dut_anti_uav_{input}_platform.pt", metrics: "results/detect_dut_anti_uav_{input}_platform.json" }
   evaluate:
     command: >-
-      python scripts/track.py platform dut_anti_uav --input residual --model {model} --classes drone
+      python scripts/track.py platform_{input} dut_anti_uav --input {input} --model {model} --classes drone
       --sequences data/yolo/dut_anti_uav/splits.json
-      && python scripts/eval_mot.py platform dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
-    outputs: { metrics: results/metrics_dut_anti_uav_test_platform_heldout.json }
+      && python scripts/eval_mot.py platform_{input} dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
+    outputs: { metrics: "results/metrics_dut_anti_uav_test_platform_{input}_heldout.json" }
   serve:
-    command: python scripts/serve.py --model {model} --port {port} --input residual
+    command: python scripts/serve.py --model {model} --port {port} --input {input}
     port: 8000
 
 metrics:
   primary: mean.HOTA
   higher_is_better: true
-  watch: [mean.HOTA, mean.MOTA, mean.IDF1, fps]
+  watch: [mean.HOTA, mean.F1, mean.Precision, mean.Recall, mean.IDF1, fps]
 
 export:
   formats: [onnx, onnx-int8, openvino]
@@ -54,6 +62,7 @@ constraints:
 | `workdir` | no | Directory where the project root is mounted in the container, default `/app` |
 | `shm_size` | no | Shared memory for the container, for example `2g` |
 | `task` | no | Free label, display only |
+| `models` | no | Several models in one project, each with its own versions and production version; `vars` fill placeholders in the shared entrypoints and outputs, `metrics` can override the project metrics, `image` can replace the project image for full isolation |
 | `datasets` | no | Registry datasets the project reads; `mount` is where a version is mounted read-only, relative to the project root |
 | `entrypoints.train` | yes | Produces a model and a metrics JSON |
 | `entrypoints.evaluate` | yes | Produces a metrics JSON for a model and a dataset |
@@ -80,6 +89,9 @@ The platform replaces these in `command`:
 | `{run_dir}` | Per-run scratch directory |
 
 ## Datasets and models
+
+- Without `models`, the project has one model named after the project. With `models`, each model is named `project.model`, for example `compressed-detection.rgb`, and `mlops run` takes `--slot <model>` (implied by `--model project.model@vN`).
+- Each registered version carries a `variant` label (architecture or recipe), by default the config file name, or `--variant`.
 
 - `--dataset name@vN` mounts that registry version read-only at its `mount`; without `@vN` the latest version is used. The run is linked to the version (lineage).
 - A successful run with a `model` output registers a new model version named after the project, with the `candidate` alias.

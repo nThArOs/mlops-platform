@@ -10,9 +10,9 @@ from mlflow.exceptions import MlflowException
 from . import db
 from .config import load_config
 from .datasets import ref_of
-from .project import ContractError
+from .project import ContractError, split_key
 
-REF_RE = re.compile(r"^([a-z0-9][a-z0-9_\-]*)@(v?\d+|[a-z]+)$")
+REF_RE = re.compile(r"^([a-z0-9][a-z0-9_\-]*(?:\.[a-z0-9][a-z0-9_\-]*)?)@(v?\d+|[a-z]+)$")
 CANDIDATE, PRODUCTION = "candidate", "production"
 
 
@@ -27,7 +27,7 @@ def is_ref(value: str) -> bool:
 def resolve(ref: str) -> tuple[str, int]:
     match = REF_RE.match(ref)
     if not match:
-        raise ContractError(f"invalid model reference: {ref} (expected project@vN or project@alias)")
+        raise ContractError(f"invalid model reference: {ref} (expected project[.model]@vN or @alias)")
     name, target = match.groups()
     if target.lstrip("v").isdigit():
         return name, int(target.lstrip("v"))
@@ -37,7 +37,7 @@ def resolve(ref: str) -> tuple[str, int]:
         raise ContractError(f"no model version with alias {target} for {name}")
 
 
-def register(project: str, run_id: str) -> int:
+def register(project: str, run_id: str, variant: str | None = None) -> int:
     c = client()
     try:
         c.create_registered_model(project)
@@ -47,6 +47,8 @@ def register(project: str, run_id: str) -> int:
     source = f"{c.get_run(run_id).info.artifact_uri}/model"
     version = int(c.create_model_version(project, source, run_id=run_id).version)
     c.set_model_version_tag(project, str(version), "status", CANDIDATE)
+    if variant:
+        c.set_model_version_tag(project, str(version), "variant", variant)
     c.set_registered_model_alias(project, CANDIDATE, str(version))
     return version
 
@@ -112,6 +114,8 @@ def list_versions(project: str) -> list[dict]:
         out.append({
             "version": version,
             "status": mv.tags.get("status", ""),
+            "variant": mv.tags.get("variant"),
+            "description": mv.description or None,
             "aliases": aliases.get(version, []),
             "run_id": mv.run_id,
             "trained_on": train_datasets(mv.run_id),
@@ -121,12 +125,17 @@ def list_versions(project: str) -> list[dict]:
     return out
 
 
-def _contract(project: str) -> dict:
+def _contract(key: str) -> dict:
+    project, slot = split_key(key)
     with db.engine().connect() as conn:
         row = conn.execute(sa.select(db.projects.c.contract).where(db.projects.c.name == project)).first()
     if row is None:
         raise ContractError(f"unknown project: {project} (run it once first)")
-    return row[0]
+    contract = row[0]
+    if slot:
+        spec = (contract.get("models") or {}).get(slot) or {}
+        contract = {**contract, "metrics": {**contract["metrics"], **(spec.get("metrics") or {})}}
+    return contract
 
 
 def check_promotion(project: str, version: int, dataset_version_id: int | None = None) -> str:
@@ -210,6 +219,11 @@ def history(project: str) -> list[dict]:
         return [dict(r) for r in conn.execute(sa.select(ev).where(ev.c.project == project).order_by(ev.c.id)).mappings()]
 
 
+def model_keys(contract: dict) -> list[tuple[str, str | None]]:
+    slots = list((contract.get("models") or {}))
+    return [(f"{contract['name']}.{s}", s) for s in slots] if slots else [(contract["name"], None)]
+
+
 def list_projects() -> list[dict]:
     c = client()
     with db.engine().connect() as conn:
@@ -217,20 +231,32 @@ def list_projects() -> list[dict]:
     registered = {m.name: m for m in c.search_registered_models()}
     out = []
     for row in rows:
-        model = registered.get(row["name"])
-        contract = row["contract"]
-        out.append({
-            "name": row["name"],
-            "task": contract.get("task"),
-            "primary": contract["metrics"]["primary"],
-            "higher_is_better": contract["metrics"]["higher_is_better"],
-            "watch": contract["metrics"].get("watch", []),
-            "descriptions": contract["metrics"].get("descriptions", {}),
-            "versions": len(c.search_model_versions(f"name='{row['name']}'")) if model else 0,
-            "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
-            "updated_at": row["updated_at"],
-        })
+        for key, slot in model_keys(row["contract"]):
+            model = registered.get(key)
+            contract = _contract(key)
+            spec = (contract.get("models") or {}).get(slot) or {} if slot else {}
+            out.append({
+                "name": key,
+                "project": row["name"],
+                "slot": slot,
+                "description": spec.get("description"),
+                "task": contract.get("task"),
+                "primary": contract["metrics"]["primary"],
+                "higher_is_better": contract["metrics"]["higher_is_better"],
+                "watch": contract["metrics"].get("watch", []),
+                "descriptions": contract["metrics"].get("descriptions", {}),
+                "versions": len(c.search_model_versions(f"name='{key}'")) if model else 0,
+                "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
+                "updated_at": row["updated_at"],
+            })
     return out
+
+
+def rename(old: str, new: str) -> None:
+    client().rename_registered_model(old, new)
+    with db.engine().begin() as conn:
+        for table in (db.model_evaluations, db.model_events):
+            conn.execute(sa.update(table).where(table.c.project == old).values(project=new))
 
 
 def production_dataset_ids() -> set[int]:
@@ -246,14 +272,15 @@ def production_dataset_ids() -> set[int]:
     return ids
 
 
-def import_model(project: str, path: Path, dataset_version_ids: list[int], metrics_file: Path | None = None,
-                 note: str | None = None) -> int:
+def import_model(key: str, path: Path, dataset_version_ids: list[int], metrics_file: Path | None = None,
+                 note: str | None = None, variant: str | None = None) -> int:
     if not path.exists():
         raise ContractError(f"model not found: {path}")
+    project, _ = split_key(key)
     mlflow.set_tracking_uri(load_config()["tracking_uri"])
     mlflow.set_experiment(project)
     with mlflow.start_run(run_name="import") as run:
-        mlflow.set_tags({"imported": "true", "source_path": str(path)})
+        mlflow.set_tags({"imported": "true", "source_path": str(path), "mlops.model": key})
         mlflow.log_params({"entrypoint": "import", **({"note": note} if note else {})})
         if path.is_dir():
             mlflow.log_artifacts(str(path), "model")
@@ -270,7 +297,7 @@ def import_model(project: str, path: Path, dataset_version_ids: list[int], metri
         for dv in dataset_version_ids:
             conn.execute(sa.insert(db.run_datasets).values(
                 run_id=run_id, project=project, entrypoint="import", dataset_version_id=dv, mount=""))
-    version = register(project, run_id)
+    version = register(key, run_id, variant)
     if note:
-        client().update_model_version(project, str(version), description=note)
+        client().update_model_version(key, str(version), description=note)
     return version

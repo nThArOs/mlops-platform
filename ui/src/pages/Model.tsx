@@ -190,8 +190,9 @@ export default function ModelPage() {
       </Link>
       <div className="page-head">
         <div>
-          <div className="eyebrow">model</div>
-          <h1 className="title">{project}</h1>
+          <div className="eyebrow">{meta?.slot ? <Link to="/models" className="mono">{meta.project}</Link> : "model"}</div>
+          <h1 className="title">{meta?.slot ?? project}</h1>
+          {meta?.description && <div className="subtitle">{meta.description}</div>}
           <div className="subtitle status-line">
             {detail.data!.production ? <Badge tone="success" dot>v{detail.data!.production} in production</Badge> : <Badge>no production version</Badge>}
             {meta && <span>primary metric <span className="mono">{meta.primary}</span><InfoTip metric={meta.primary} custom={meta.descriptions} />, {meta.higher_is_better ? "higher" : "lower"} is better</span>}
@@ -219,7 +220,7 @@ export default function ModelPage() {
       <table className="rows">
         <thead>
           <tr>
-            <th>version</th><th>status</th><th>trained on</th>
+            <th>version</th><th>variant</th><th>status</th><th>trained on</th>
             <th className="num">{primary.replace(/^mean\./, "")}<InfoTip metric={primary} custom={meta?.descriptions} align="right" /></th>
             {others.map((k) => <th key={k} className="num">{k.replace(/^mean\./, "")}<InfoTip metric={k} custom={meta?.descriptions} align="right" /></th>)}
             <th>run</th><th />
@@ -231,7 +232,8 @@ export default function ModelPage() {
             const value = m?.[primary];
             return (
               <tr key={v.version}>
-                <td className="mono">v{v.version}</td>
+                <td className="mono" title={v.description ?? undefined}>v{v.version}</td>
+                <td>{v.variant ? <span className="mono muted">{v.variant}</span> : <span className="faint">–</span>}</td>
                 <td>{statusBadge(v.status)}</td>
                 <td>
                   {v.trained_on.length === 0 && <span className="faint">unknown</span>}

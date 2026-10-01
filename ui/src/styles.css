@@ -295,3 +295,5 @@ dialog.modal::backdrop { background: var(--overlay); }
 .derived-row:hover, .derived-row:focus-visible { background: var(--hover); outline: none; }
 .derived-name { grid-row: span 3; color: var(--text); display: inline-flex; align-items: flex-start; }
 .derived-value { color: var(--text); font-size: 14px; }
+
+.rows td.group-row { padding-top: 18px; padding-bottom: 6px; color: var(--text); border-bottom: 1px solid var(--border-strong); }

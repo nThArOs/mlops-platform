@@ -48,7 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", help="hardware profile from configs/hardware_profiles.yaml")
     p.add_argument("--config", help="config file relative to the project root")
     p.add_argument("--dataset", action="append", default=[], help="name or name@vN, repeatable")
-    p.add_argument("--model", help="path in the project, or project@vN / project@alias from the registry")
+    p.add_argument("--model", help="path in the project, or project[.model]@vN / @alias from the registry")
+    p.add_argument("--slot", help="model of the project to train or evaluate, when it declares several")
+    p.add_argument("--variant", help="label for the registered version, default: config file name")
     for name in ("split", "sample"):
         p.add_argument(f"--{name}")
 
@@ -94,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dataset", action="append", default=[], help="training dataset, name@vN, repeatable")
     p.add_argument("--metrics", help="metrics JSON produced when the model was trained")
     p.add_argument("--note")
+    p.add_argument("--slot", help="model of the project, when it declares several")
+    p.add_argument("--variant", help="architecture or recipe label, for example yolo11n")
+    p = md.add_parser("rename", help="rename a registered model and its history")
+    p.add_argument("old")
+    p.add_argument("new")
     p = md.add_parser("promote")
     p.add_argument("project")
     p.add_argument("version", type=lambda v: int(v.lstrip("v")))
@@ -182,8 +189,12 @@ def model_command(args) -> int:
         ids = [datasets.get_version(r)["id"] for r in args.dataset]
         path = Path(args.path) if Path(args.path).is_absolute() else project.root / args.path
         metrics = (Path(args.metrics) if Path(args.metrics).is_absolute() else project.root / args.metrics) if args.metrics else None
-        version = models.import_model(project.name, path, ids, metrics, args.note)
-        print(f"registered {project.name}@v{version} (candidate) from {path.name}")
+        key = project.model_key(args.slot)
+        version = models.import_model(key, path, ids, metrics, args.note, args.variant)
+        print(f"registered {key}@v{version} (candidate) from {path.name}")
+    elif args.action == "rename":
+        models.rename(args.old, args.new)
+        print(f"{args.old} renamed to {args.new}")
     elif args.action == "promote":
         dv = datasets.get_version(args.dataset)["id"] if args.dataset else None
         detail = models.promote(args.project, args.version, dv, args.force, args.reason)
@@ -244,12 +255,14 @@ def main(argv=None) -> int:
             return 0
         project = load_project(args.project)
         if args.cmd == "validate":
-            print(f"{project.name}: ok ({', '.join(project.entrypoints)})")
+            models_info = f", models: {', '.join(project.models)}" if project.models else ""
+            print(f"{project.name}: ok (entrypoints: {', '.join(project.entrypoints)}{models_info})")
             return 0
         from .run import run_entrypoint
 
         values = {"model": args.model, "split": args.split, "sample": args.sample}
-        return run_entrypoint(project, args.entrypoint, args.profile, args.config, values, args.dataset)
+        return run_entrypoint(project, args.entrypoint, args.profile, args.config, values, args.dataset, args.slot,
+                              args.variant)
     except ContractError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
