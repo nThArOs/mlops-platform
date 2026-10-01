@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { jobs, models } from "../api";
+import { api, jobs, models } from "../api";
 import { paramHelp } from "../lib/params";
 import { useFetch } from "../lib/useFetch";
 import { Help } from "./InfoTip";
 import { ProfilePicker } from "./Benchmarks";
+import DatasetPicker, { refsOf, versionsByName, type DatasetHistory, type Picked } from "./DatasetPicker";
 import { Field, Loading, Modal, Note } from "./ui";
 
 type Flat = Record<string, unknown>;
@@ -52,11 +53,12 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
   const options = useFetch(() => jobs.options(project), [project]);
   const key = slot ? `${project}.${slot}` : project;
   const registry = useFetch(() => models.get(key).catch(() => null), [key]);
-  const [evalPicked, setEvalPicked] = useState<Record<string, number | "">>({});
+  const registered = useFetch(() => api.datasets(), []);
+  const [evalPicked, setEvalPicked] = useState<Picked>({});
   const [config, setConfig] = useState<string | null>(null);
   const base = useFetch(() => (config ? jobs.config(project, config) : Promise.resolve(null)), [project, config]);
   const [values, setValues] = useState<Record<string, string>>({});
-  const [picked, setPicked] = useState<Record<string, number | "">>({});
+  const [picked, setPicked] = useState<Picked>({});
   const [profile, setProfile] = useState("");
   const [variant, setVariant] = useState("");
   const [evaluate, setEvaluate] = useState(true);
@@ -65,12 +67,30 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
   const [busy, setBusy] = useState(false);
 
   const o = options.data;
+  const history = useMemo<DatasetHistory>(() => {
+    const versions = registry.data?.versions ?? [];
+    const prod = versions.find((v) => v.version === registry.data?.production);
+    const latest = [...versions].sort((a, b) => b.version - a.version).find((v) => !v.parent && v.trained_on.length);
+    const inProd = versionsByName(prod?.trained_on ?? []);
+    const inLatest = versionsByName(latest?.trained_on ?? []);
+    return Object.fromEntries((o?.datasets ?? []).map((d) => [d.name, {
+      production: inProd[d.name], latest: inLatest[d.name], latestVersion: latest?.version,
+    }]));
+  }, [o, registry.data]);
+
   useEffect(() => {
-    if (!o) return;
+    if (!o || registry.loading) return;
     setConfig((c) => c ?? o.entrypoints.train?.config ?? o.configs[0] ?? null);
     setProfile((p) => p || o.default_profile);
-    setPicked((p) => (Object.keys(p).length ? p : Object.fromEntries(o.datasets.map((d) => [d.name, d.versions[0] ?? ""]))));
-  }, [o]);
+    const used = Object.values(history).some((h) => h.production != null || h.latest != null);
+    setPicked((p) => (Object.keys(p).length ? p : Object.fromEntries(o.datasets.map((d) => {
+      const h = history[d.name];
+      return [d.name, used ? (h?.production ?? h?.latest ?? "") : (d.versions[0] ?? "")];
+    }))));
+  }, [o, registry.loading, history]);
+  const others = (registered.data ?? [])
+    .filter((d) => !o?.datasets.some((x) => x.name === d.name))
+    .map((d) => ({ name: d.name, version: d.version, license: d.license }));
 
   const flat = useMemo(() => flatten(base.data?.values ?? {}), [base.data]);
   const profiles = (o?.profiles ?? []).map((p) => ({ ...p, limits: constraints[p.name] }));
@@ -87,12 +107,12 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
   }, [o, registry.loading, registry.data, picked, evalPicked]);
 
   const changed = Object.entries(values).filter(([k, v]) => v !== show(flat[k]));
-  const evalRefs = Object.entries(evalPicked).filter(([, v]) => v !== "").map(([n, v]) => `${n}@v${v}`);
-  const refs = Object.entries(picked).filter(([, v]) => v !== "").map(([n, v]) => `${n}@v${v}`);
+  const evalRefs = refsOf(evalPicked);
+  const refs = refsOf(picked);
 
   async function submit() {
     if (!config) return setError("Choose a config to start from.");
-    if (refs.length === 0) return setError("Mount at least one dataset.");
+    if (refs.length === 0) return setError("Check at least one dataset.");
     setBusy(true);
     setError(null);
     try {
@@ -151,22 +171,13 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
             </Field>
           </div>
 
-          <div className="field">
-            <span className="field-label">Datasets<Help title="Datasets">
-              <span>Each dataset version is mounted read-only where the project expects it. The run is linked to these exact versions, so the new model always knows what it was trained on.</span>
-            </Help></span>
-            {o.datasets.map((d) => (
-              <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="mono" style={{ flex: 1 }}>{d.name}</span>
-                <span className="faint mono" style={{ fontSize: 12 }}>{d.mount}</span>
-                <select className="select mono" value={picked[d.name] ?? ""}
-                  onChange={(e) => setPicked({ ...picked, [d.name]: e.target.value === "" ? "" : Number(e.target.value) })}>
-                  <option value="">not mounted</option>
-                  {d.versions.map((v) => <option key={v} value={v}>v{v}</option>)}
-                </select>
-              </div>
-            ))}
-          </div>
+          <DatasetPicker label="Datasets" project={project} declared={o.datasets} picked={picked} onChange={setPicked}
+            history={history} others={others} help={
+              <Help title="Datasets">
+                <span>Checked datasets are mounted read-only where the project expects them. The run is linked to these exact versions, so the new model always knows what it was trained on.</span>
+                <span>Defaults to the versions production was trained on. The right column shows them, and those of the latest trained version.</span>
+                <span>Mounting only makes the data available: the project code decides which folders it reads.</span>
+              </Help>} />
 
           <div className="field">
             <span className="field-label">Parameters{changed.length > 0 && <span className="faint"> · {changed.length} changed</span>}<Help title="Parameters">
@@ -204,19 +215,11 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
             </Help>
           </label>
           {evaluate && o.datasets.length > 0 && (
-            <div className="field">
-              <span className="field-label">Evaluate on <span className="faint">· defaults to the versions production was evaluated on, so results are comparable</span></span>
-              {o.datasets.map((d) => (
-                <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span className="mono" style={{ flex: 1 }}>{d.name}</span>
-                  <select className="select mono" value={evalPicked[d.name] ?? ""}
-                    onChange={(e) => setEvalPicked({ ...evalPicked, [d.name]: e.target.value === "" ? "" : Number(e.target.value) })}>
-                    <option value="">not mounted</option>
-                    {d.versions.map((v) => <option key={v} value={v}>v{v}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
+            <DatasetPicker label="Evaluate on" project={project} declared={o.datasets} picked={evalPicked}
+              onChange={setEvalPicked} help={
+                <Help title="Evaluation data">
+                  <span>Defaults to the versions production was evaluated on, so both are compared on the same data.</span>
+                </Help>} />
           )}
           <ProfilePicker profiles={profiles} picked={bench} onChange={setBench} />
           {error && <Note kind="error">{error}</Note>}

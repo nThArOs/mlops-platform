@@ -358,3 +358,11 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .profiles { display: grid; grid-template-columns: 18px minmax(110px, auto) minmax(120px, auto) 1fr; column-gap: 12px; row-gap: 6px; align-items: center; }
 .profile-row { display: contents; font-size: 13px; cursor: pointer; }
 .limits { display: inline-flex; align-items: center; }
+
+.datasets, .datasets-other { display: grid; grid-template-columns: 18px minmax(150px, auto) minmax(140px, 1fr) 72px minmax(200px, auto); column-gap: 12px; row-gap: 6px; align-items: center; }
+.datasets-other { margin-top: 10px; }
+.datasets-other > span:first-child { grid-column: 1 / -1; display: inline-flex; align-items: center; }
+.dataset-row { display: contents; font-size: 13px; cursor: pointer; }
+.dataset-row.off > .mono:not(select) { color: var(--text-3); }
+.dataset-mount { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dataset-history { font-size: 12px; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
