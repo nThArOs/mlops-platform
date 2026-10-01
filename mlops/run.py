@@ -221,7 +221,9 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
                                         text=True, encoding="utf-8", errors="replace")
                 for line in proc.stdout:
                     sys.stdout.write(line)
+                    sys.stdout.flush()
                     log.write(line)
+                    log.flush()
                 returncode = proc.wait()
             status = "FINISHED" if returncode == 0 else "FAILED"
         except KeyboardInterrupt:

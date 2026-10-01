@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -231,3 +232,33 @@ def production_dataset_ids() -> set[int]:
         with db.engine().connect() as conn:
             ids |= set(conn.execute(sa.select(rd.c.dataset_version_id).where(rd.c.run_id == run_id)).scalars())
     return ids
+
+
+def import_model(project: str, path: Path, dataset_version_ids: list[int], metrics_file: Path | None = None,
+                 note: str | None = None) -> int:
+    if not path.exists():
+        raise ContractError(f"model not found: {path}")
+    mlflow.set_tracking_uri(load_config()["tracking_uri"])
+    mlflow.set_experiment(project)
+    with mlflow.start_run(run_name="import") as run:
+        mlflow.set_tags({"imported": "true", "source_path": str(path)})
+        mlflow.log_params({"entrypoint": "import", **({"note": note} if note else {})})
+        if path.is_dir():
+            mlflow.log_artifacts(str(path), "model")
+        else:
+            mlflow.log_artifact(str(path), "model")
+        if metrics_file:
+            from .run import flatten_metrics
+
+            data = json.loads(metrics_file.read_text(encoding="utf-8"))
+            mlflow.log_metrics(flatten_metrics(data))
+            mlflow.log_artifact(str(metrics_file), "metrics")
+        run_id = run.info.run_id
+    with db.engine().begin() as conn:
+        for dv in dataset_version_ids:
+            conn.execute(sa.insert(db.run_datasets).values(
+                run_id=run_id, project=project, entrypoint="import", dataset_version_id=dv, mount=""))
+    version = register(project, run_id)
+    if note:
+        client().update_model_version(project, str(version), description=note)
+    return version

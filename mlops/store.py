@@ -1,3 +1,4 @@
+import fnmatch
 import hashlib
 import json
 import os
@@ -66,9 +67,12 @@ class Store:
         os.chmod(dst, READ_ONLY)
         return digest, "linked" if linked else "copied"
 
-    def add_folder(self, folder: Path, link: bool = True) -> tuple[dict, dict]:
+    def add_folder(self, folder: Path, link: bool = True, ignore: list[str] | None = None) -> tuple[dict, dict]:
         files, counts = {}, {"linked": 0, "copied": 0, "existing": 0}
+        ignore = ignore or []
         for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+            if any(fnmatch.fnmatch(part, pat) for pat in ignore for part in path.relative_to(folder).parts):
+                continue
             digest, how = self.put_file(path, link)
             counts[how] += 1
             files[path.relative_to(folder).as_posix()] = {"hash": digest, "size": path.stat().st_size}

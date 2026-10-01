@@ -88,6 +88,12 @@ def build_parser() -> argparse.ArgumentParser:
     md = sub.add_parser("model", help="model registry").add_subparsers(dest="action", required=True)
     p = md.add_parser("list")
     p.add_argument("project", help="project name")
+    p = md.add_parser("import", help="register an existing model file with its training datasets")
+    p.add_argument("project", help="project root")
+    p.add_argument("path", help="model file or folder")
+    p.add_argument("--dataset", action="append", default=[], help="training dataset, name@vN, repeatable")
+    p.add_argument("--metrics", help="metrics JSON produced when the model was trained")
+    p.add_argument("--note")
     p = md.add_parser("promote")
     p.add_argument("project")
     p.add_argument("version", type=lambda v: int(v.lstrip("v")))
@@ -165,6 +171,18 @@ def model_command(args) -> int:
             rows.append({"version": f"v{v['version']}", "status": v["status"],
                          "trained_on": ", ".join(v["trained_on"]), "evaluations": evals})
         table(rows, ["version", "status", "trained_on", "evaluations"])
+    elif args.action == "import":
+        from pathlib import Path
+
+        from .run import save_project
+
+        project = load_project(args.project)
+        save_project(project)
+        ids = [datasets.get_version(r)["id"] for r in args.dataset]
+        path = Path(args.path) if Path(args.path).is_absolute() else project.root / args.path
+        metrics = (Path(args.metrics) if Path(args.metrics).is_absolute() else project.root / args.metrics) if args.metrics else None
+        version = models.import_model(project.name, path, ids, metrics, args.note)
+        print(f"registered {project.name}@v{version} (candidate) from {path.name}")
     elif args.action == "promote":
         dv = datasets.get_version(args.dataset)["id"] if args.dataset else None
         detail = models.promote(args.project, args.version, dv, args.force, args.reason)
@@ -208,7 +226,7 @@ def main(argv=None) -> int:
 
     logging.getLogger("mlflow").setLevel(logging.WARNING)
     for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="replace")
+        stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 
     args = build_parser().parse_args(argv)
     try:

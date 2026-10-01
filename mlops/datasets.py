@@ -49,7 +49,7 @@ def add_version(name: str, folder: str | Path, license: str | None = None, sourc
             raise ContractError("a new dataset needs a license (--license)")
 
     st = store()
-    files, counts = st.add_folder(folder, link)
+    files, counts = st.add_folder(folder, link, load_config().get("dataset_ignore", []))
     if not files:
         raise ContractError(f"no file in {folder}")
     digest = st.save_manifest(files)

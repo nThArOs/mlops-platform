@@ -8,3 +8,4 @@ default_profile: pc-cpu
 prometheus_url: http://127.0.0.1:9090
 prometheus_targets_dir: prometheus/targets
 prometheus_target_host: host.docker.internal
+dataset_ignore: ["*.cache", ".DS_Store", "Thumbs.db", "__MACOSX", "__pycache__", ".ipynb_checkpoints"]

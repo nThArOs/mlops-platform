@@ -7,6 +7,52 @@ import { Loading, Note } from "./ui";
 
 const TEXT_PREVIEW_BYTES = 64 * 1024;
 
+type Box = { cls: number; cx: number; cy: number; w: number; h: number };
+
+function labelPath(path: string): string | null {
+  const i = path.lastIndexOf("/images/");
+  if (i < 0) return null;
+  return `${path.slice(0, i)}/labels/${path.slice(i + 8).replace(/\.[^./]+$/, ".txt")}`;
+}
+
+function AnnotatedImage({ name, version, path }: { name: string; version: number; path: string }) {
+  const [boxes, setBoxes] = useState<Box[] | null>(null);
+  const labels = labelPath(path);
+
+  useEffect(() => {
+    setBoxes(null);
+    if (!labels) return;
+    fetch(api.fileUrl(name, version, labels))
+      .then((r) => (r.ok ? r.text() : Promise.reject()))
+      .then((t) => setBoxes(t.split(/\r?\n/).map((l) => l.trim().split(/\s+/).map(Number))
+        .filter((v) => v.length >= 5 && v.every((x) => !Number.isNaN(x)))
+        .map(([cls, cx, cy, w, h]) => ({ cls, cx, cy, w, h }))))
+      .catch(() => setBoxes(null));
+  }, [name, version, labels]);
+
+  return (
+    <>
+      <div style={{ position: "relative" }}>
+        <img src={api.fileUrl(name, version, path)} alt={path} />
+        {boxes && (
+          <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+            {boxes.map((b, i) => (
+              <rect key={i} x={b.cx - b.w / 2} y={b.cy - b.h / 2} width={b.w} height={b.h}
+                fill="none" stroke="var(--series-2)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+            ))}
+          </svg>
+        )}
+      </div>
+      {boxes && (
+        <div className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>
+          {boxes.length} {boxes.length === 1 ? "box" : "boxes"} from <span className="mono">{labels}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
 function Preview({ name, version, path }: { name: string; version: number; path: string }) {
   const url = api.fileUrl(name, version, path);
   const type = kind(path);
@@ -26,7 +72,7 @@ function Preview({ name, version, path }: { name: string; version: number; path:
   return (
     <div className="preview">
       <div className="mono muted" style={{ marginBottom: 10, wordBreak: "break-all" }}>{path}</div>
-      {type === "image" && <img src={url} alt={path} />}
+      {type === "image" && <AnnotatedImage name={name} version={version} path={path} />}
       {type === "text" && text === null && !error && <Loading label="Reading" />}
       {type === "text" && text !== null && <pre>{text}</pre>}
       {error && <Note kind="error">Couldn't read the file. {error}</Note>}
