@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Play, Square } from "lucide-react";
 import { production, type Deployment, type LiveMetrics } from "../api";
+import InfoTip from "../components/InfoTip";
 import LineChart from "../components/LineChart";
 import { Badge, Loading, Note, Stat } from "../components/ui";
 import { ago } from "../lib/format";
@@ -61,28 +62,86 @@ export function ProductionList() {
   );
 }
 
+const RATES = [
+  { label: "Pause", fps: 0 },
+  { label: "0.5 fps", fps: 0.5 },
+  { label: "1 fps", fps: 1 },
+  { label: "2 fps", fps: 2 },
+];
+
+function LiveView({ project }: { project: string }) {
+  const [view, setView] = useState<"input" | "source">("input");
+  const [fps, setFps] = useState(1);
+  const [tick, setTick] = useState(() => Date.now());
+  const [state, setState] = useState<"loading" | "ok" | "none" | "error">("loading");
+  const timer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const next = () => {
+    window.clearTimeout(timer.current);
+    if (fps > 0) timer.current = window.setTimeout(() => setTick(Date.now()), 1000 / fps);
+  };
+
+  useEffect(() => {
+    if (fps > 0) setTick(Date.now());
+    else window.clearTimeout(timer.current);
+  }, [fps]);
+
+  async function onError() {
+    const r = await fetch(production.frameUrl(project, view, Date.now()));
+    setState(r.status === 404 ? "none" : "error");
+    if (r.status !== 404) next();
+  }
+
+  if (state === "none") return <p className="muted">This service doesn't expose a preview. Add <span className="mono">GET /frame.jpg</span> to its serve entrypoint to see what the model sees.</p>;
+
+  return (
+    <div>
+      <div className="live-bar">
+        <div className="segmented">
+          <button className={view === "input" ? "on" : ""} onClick={() => setView("input")}>Model input</button>
+          <button className={view === "source" ? "on" : ""} onClick={() => setView("source")}>Source</button>
+        </div>
+        <div className="segmented">
+          {RATES.map((r) => (
+            <button key={r.label} className={fps === r.fps ? "on" : ""} onClick={() => setFps(r.fps)}>{r.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="live">
+        <img src={production.frameUrl(project, view, tick)} alt={`${view === "input" ? "Model input" : "Source frame"} with detections`}
+          onLoad={() => { setState("ok"); next(); }} onError={onError} />
+      </div>
+      <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>
+        {state === "error" ? "No frame yet, retrying." : "Frames are encoded only while this view is open; the cost shows as the preview stage above."}
+      </p>
+    </div>
+  );
+}
+
 function Charts({ metrics }: { metrics: LiveMetrics }) {
   const c1 = "var(--series-1)";
   return (
     <div className="charts">
-      <LineChart title="Latency" format={ms} series={[
+      <LineChart title="Latency" info="latency" format={ms} series={[
         { name: "p50", points: metrics.latency_p50_ms ?? [], color: c1 },
         { name: "p95", points: metrics.latency_p95_ms ?? [], color: "var(--series-2)" },
       ]} />
-      <LineChart title="Throughput, requests per second" format={rps}
+      <LineChart title="Throughput, requests per second" info="throughput" format={rps}
         series={[{ name: "requests", points: metrics.requests_per_s ?? [], color: c1 }]} />
-      <LineChart title="Error rate" format={pct}
+      <LineChart title="Error rate" info="error_rate" format={pct}
         series={[{ name: "errors", points: metrics.error_rate ?? [], color: c1 }]} />
-      <LineChart title="Predictions per input" format={num}
+      <LineChart title="Predictions per input" info="predictions_per_input" format={num}
         series={[{ name: "predictions", points: metrics.predictions_per_input ?? [], color: c1 }]} />
       {Object.keys(metrics.stages_ms ?? {}).length > 0 && (
-        <LineChart title="Time per frame and stage" format={ms}
+        <LineChart title="Time per frame and stage" info="stages" format={ms}
           series={Object.keys(metrics.stages_ms!).sort().slice(0, 3).map((stage, i) => ({
             name: stage, points: metrics.stages_ms![stage], color: `var(--series-${i + 1})`,
           }))} />
       )}
       {(metrics.confidence_mean?.length ?? 0) > 0 && (
-        <LineChart title="Mean confidence" format={(v) => v.toFixed(2)}
+        <LineChart title="Mean confidence" info="confidence" format={(v) => v.toFixed(2)}
           series={[{ name: "confidence", points: metrics.confidence_mean ?? [], color: c1 }]} />
       )}
     </div>
@@ -165,10 +224,12 @@ export function ProductionService() {
       )}
 
       <div className="stats">
-        <Stat label="Latency p95" value={last(m.latency_p95_ms) !== undefined ? ms(last(m.latency_p95_ms)!) : "–"} />
-        <Stat label="Throughput" value={last(m.requests_per_s) !== undefined ? rps(last(m.requests_per_s)!) : "–"} />
-        <Stat label="Error rate" value={last(m.error_rate) !== undefined ? pct(last(m.error_rate)!) : "–"} />
-        <Stat label={m.confidence_mean?.length ? "Mean confidence" : "Predictions per input"}
+        <Stat label={<>Latency p95<InfoTip metric="latency" /></>} value={last(m.latency_p95_ms) !== undefined ? ms(last(m.latency_p95_ms)!) : "–"} />
+        <Stat label={<>Throughput<InfoTip metric="throughput" /></>} value={last(m.requests_per_s) !== undefined ? rps(last(m.requests_per_s)!) : "–"} />
+        <Stat label={<>Error rate<InfoTip metric="error_rate" /></>} value={last(m.error_rate) !== undefined ? pct(last(m.error_rate)!) : "–"} />
+        <Stat label={m.confidence_mean?.length
+          ? <>Mean confidence<InfoTip metric="confidence" align="right" /></>
+          : <>Predictions per input<InfoTip metric="predictions_per_input" align="right" /></>}
           value={m.confidence_mean?.length ? last(m.confidence_mean)!.toFixed(2)
             : last(m.predictions_per_input) !== undefined ? num(last(m.predictions_per_input)!) : "–"} />
       </div>
@@ -187,6 +248,13 @@ export function ProductionService() {
         {metrics.data && <Charts metrics={metrics.data} />}
         <p className="faint" style={{ fontSize: 12.5, marginTop: 16 }}>Refreshed every 10 seconds from Prometheus.</p>
       </div>
+
+      {d?.running && (
+        <div className="section">
+          <div className="section-head"><h2 className="section-title">Live view</h2></div>
+          <LiveView project={project} />
+        </div>
+      )}
 
       <div className="section">
         <div className="section-head">

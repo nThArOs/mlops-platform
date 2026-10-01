@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -206,6 +206,17 @@ def stop_service(project: str):
 def service_metrics(project: str, minutes: int = 60):
     minutes = max(5, min(minutes, 24 * 60))
     return deploy.live_metrics(project, minutes, step=max(5, minutes * 60 // 240))
+
+
+@app.get("/api/production/{project}/frame")
+def service_frame(project: str, view: str = "input", width: int = 960):
+    st = deploy.status(project)
+    if not st.get("running") or not st.get("port"):
+        raise HTTPException(409, f"{project} is not running")
+    data = deploy.frame(st["port"], view, width)
+    if data is None:
+        raise HTTPException(404, "this service has no preview")
+    return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/production/{project}/logs")

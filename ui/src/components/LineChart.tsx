@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import InfoTip from "./InfoTip";
 
 export type Series = { name: string; points: [number, number][]; color: string };
 
@@ -13,8 +14,9 @@ function niceMax(v: number): number {
 
 const time = (t: number) => new Date(t * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
-export default function LineChart({ title, series, format, height = 150 }: {
+export default function LineChart({ title, info, series, format, height = 150 }: {
   title: string;
+  info?: string;
   series: Series[];
   format: (v: number) => string;
   height?: number;
@@ -63,7 +65,7 @@ export default function LineChart({ title, series, format, height = 150 }: {
   return (
     <div className="chart" ref={ref}>
       <div className="chart-head">
-        <span className="chart-title">{title}</span>
+        <span className="chart-title">{title}{info && <InfoTip metric={info} />}</span>
         {legend}
       </div>
       {filled.length === 0 ? (

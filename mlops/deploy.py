@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -64,6 +65,19 @@ def status(project: str) -> dict:
         "port": port,
         "healthy": running and _healthy(port),
     }
+
+
+def frame(port: int, view: str, width: int) -> bytes | None:
+    query = urllib.parse.urlencode({"view": view, "width": width})
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/frame.jpg?{query}", timeout=3) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        if e.code == 503:
+            raise ContractError("no frame processed yet")
+        return None
+    except OSError:
+        return None
 
 
 def logs(project: str, tail: int = 200) -> str:

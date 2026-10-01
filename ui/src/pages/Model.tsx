@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, RotateCcw } from "lucide-react";
 import { models, type ModelEvent, type ModelSummary } from "../api";
+import ConfusionMatrix from "../components/ConfusionMatrix";
+import InfoTip from "../components/InfoTip";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
 import { date } from "../lib/format";
 import { useFetch } from "../lib/useFetch";
@@ -137,6 +139,7 @@ export default function ModelPage() {
   const [promoting, setPromoting] = useState<number | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [cmVersion, setCmVersion] = useState<number | null>(null);
 
   const meta: ModelSummary | undefined = summary.data?.find((m) => m.name === project);
   const versions = detail.data?.versions ?? [];
@@ -164,9 +167,12 @@ export default function ModelPage() {
   const primary = meta?.primary ?? "";
   const evals = dataset ? versions.map((v) => v.evaluations[dataset]?.[primary]).filter((x) => x !== undefined) : [];
   const best = evals.length ? (meta?.higher_is_better ? Math.max(...evals) : Math.min(...evals)) : undefined;
-  const others = dataset
-    ? [...new Set(versions.flatMap((v) => Object.keys(v.evaluations[dataset] ?? {})))].filter((k) => k !== primary).slice(0, 3)
-    : [];
+  const available = dataset ? new Set(versions.flatMap((v) => Object.keys(v.evaluations[dataset] ?? {}))) : new Set<string>();
+  const watched = (meta?.watch ?? []).filter((k) => k !== primary && available.has(k));
+  const others = (watched.length ? watched : [...available].filter((k) => k !== primary)).slice(0, 4);
+  const withCm = dataset ? versions.filter((v) => v.confusion?.[dataset]) : [];
+  const cmShown = withCm.find((v) => v.version === cmVersion)
+    ?? withCm.find((v) => v.version === detail.data!.production) ?? withCm[withCm.length - 1];
   const canRollback = detail.data!.history.some((e) => e.to_version === detail.data!.production && e.from_version);
 
   const done = (m: string) => {
@@ -188,7 +194,7 @@ export default function ModelPage() {
           <h1 className="title">{project}</h1>
           <div className="subtitle status-line">
             {detail.data!.production ? <Badge tone="success" dot>v{detail.data!.production} in production</Badge> : <Badge>no production version</Badge>}
-            {meta && <span>primary metric <span className="mono">{meta.primary}</span>, {meta.higher_is_better ? "higher" : "lower"} is better</span>}
+            {meta && <span>primary metric <span className="mono">{meta.primary}</span><InfoTip metric={meta.primary} custom={meta.descriptions} />, {meta.higher_is_better ? "higher" : "lower"} is better</span>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -214,8 +220,8 @@ export default function ModelPage() {
         <thead>
           <tr>
             <th>version</th><th>status</th><th>trained on</th>
-            <th className="num">{primary}</th>
-            {others.map((k) => <th key={k} className="num">{k}</th>)}
+            <th className="num">{primary.replace(/^mean\./, "")}<InfoTip metric={primary} custom={meta?.descriptions} align="right" /></th>
+            {others.map((k) => <th key={k} className="num">{k.replace(/^mean\./, "")}<InfoTip metric={k} custom={meta?.descriptions} align="right" /></th>)}
             <th>run</th><th />
           </tr>
         </thead>
@@ -255,6 +261,22 @@ export default function ModelPage() {
           })}
         </tbody>
       </table>
+
+      {cmShown && dataset && (
+        <div className="section">
+          <div className="section-head">
+            <h2 className="section-title">Confusion matrix<InfoTip metric="confusion" /></h2>
+            <span className="status-line">
+              <span>version</span>
+              <select className="select mono" value={cmShown.version} onChange={(e) => setCmVersion(Number(e.target.value))}>
+                {withCm.map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
+              </select>
+              <span>on <span className="mono">{dataset}</span></span>
+            </span>
+          </div>
+          <ConfusionMatrix data={cmShown.confusion[dataset]} />
+        </div>
+      )}
 
       <div className="section">
         <div className="section-head"><h2 className="section-title">History</h2></div>

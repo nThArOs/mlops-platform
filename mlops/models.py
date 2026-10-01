@@ -60,11 +60,20 @@ def download(project: str, version: int, dst: Path) -> Path:
 
 
 def record_evaluation(project: str, version: int, run_id: str, dataset_version_ids: list[int],
-                      metrics: dict[str, float]) -> None:
+                      metrics: dict[str, float], confusion: dict | None = None) -> None:
     with db.engine().begin() as conn:
         for dv in dataset_version_ids:
             conn.execute(sa.insert(db.model_evaluations).values(
-                project=project, model_version=version, run_id=run_id, dataset_version_id=dv, metrics=metrics))
+                project=project, model_version=version, run_id=run_id, dataset_version_id=dv, metrics=metrics,
+                confusion=confusion))
+
+
+def confusion_matrices(project: str, version: int) -> dict[int, dict]:
+    e = db.model_evaluations
+    query = (sa.select(e.c.dataset_version_id, e.c.confusion)
+             .where(e.c.project == project, e.c.model_version == version).order_by(e.c.id))
+    with db.engine().connect() as conn:
+        return {dv: cm for dv, cm in conn.execute(query) if cm}
 
 
 def evaluations(project: str, version: int) -> dict[int, dict]:
@@ -107,6 +116,7 @@ def list_versions(project: str) -> list[dict]:
             "run_id": mv.run_id,
             "trained_on": train_datasets(mv.run_id),
             "evaluations": {ref_of(dv): m for dv, m in evaluations(project, version).items()},
+            "confusion": {ref_of(dv): cm for dv, cm in confusion_matrices(project, version).items()},
         })
     return out
 
@@ -214,6 +224,8 @@ def list_projects() -> list[dict]:
             "task": contract.get("task"),
             "primary": contract["metrics"]["primary"],
             "higher_is_better": contract["metrics"]["higher_is_better"],
+            "watch": contract["metrics"].get("watch", []),
+            "descriptions": contract["metrics"].get("descriptions", {}),
             "versions": len(c.search_model_versions(f"name='{row['name']}'")) if model else 0,
             "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
             "updated_at": row["updated_at"],

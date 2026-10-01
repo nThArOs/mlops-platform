@@ -66,8 +66,13 @@ model_evaluations = sa.Table(
     sa.Column("run_id", sa.String(32), nullable=False),
     sa.Column("dataset_version_id", sa.ForeignKey("dataset_versions.id"), nullable=False),
     sa.Column("metrics", sa.JSON, nullable=False),
+    sa.Column("confusion", sa.JSON),
     _created(),
 )
+
+MIGRATIONS = [
+    "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS confusion JSON",
+]
 
 model_events = sa.Table(
     "model_events", metadata,
@@ -86,4 +91,7 @@ model_events = sa.Table(
 def engine() -> sa.Engine:
     eng = sa.create_engine(load_config()["database_url"])
     metadata.create_all(eng)
+    with eng.begin() as conn:
+        for statement in MIGRATIONS:
+            conn.execute(sa.text(statement))
     return eng

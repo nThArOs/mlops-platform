@@ -245,3 +245,33 @@ dialog.modal::backdrop { background: var(--overlay); }
 .timeline-item { display: grid; grid-template-columns: 150px 90px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); align-items: baseline; }
 .logs { font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; max-height: 320px; overflow: auto; padding: 14px; margin: 0; }
 @media (max-width: 860px) { .charts { grid-template-columns: 1fr; } .timeline-item { grid-template-columns: 1fr; gap: 2px; } }
+
+.cm { border-collapse: separate; border-spacing: 2px; }
+.cm th { font-weight: 400; font-size: 12px; color: var(--text-2); padding: 4px 10px; text-align: center; }
+.cm tbody th { text-align: right; }
+.cm td { min-width: 96px; height: 52px; text-align: center; border-radius: 6px; }
+.cm td.cm-none { color: var(--text-3); background: var(--surface-2); }
+.live { position: relative; background: #000; border-radius: var(--radius-lg); overflow: hidden; min-height: 120px; }
+.live img { display: block; width: 100%; height: auto; }
+.live-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+
+.tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; text-align: left; }
+.tip-btn {
+  border: 0; background: none; padding: 2px; border-radius: 50%; cursor: help; color: var(--text-3);
+  display: inline-flex; line-height: 0;
+}
+.tip-btn:hover, .tip-btn:focus-visible { color: var(--text); outline: none; }
+.tip-panel {
+  display: none; position: absolute; top: calc(100% + 6px); z-index: 20; width: 260px;
+  flex-direction: column; gap: 6px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  font-family: var(--font-sans); font-size: 12.5px; line-height: 1.45; color: var(--text-2);
+  white-space: normal; font-weight: 400; text-transform: none;
+}
+.tip-panel.left { left: -8px; }
+.tip-panel.right { right: -8px; }
+.tip:hover .tip-panel, .tip:focus-within .tip-panel { display: flex; }
+.tip-title { font-family: var(--font-serif); font-size: 16px; color: var(--text); }
+.tip-formula { color: var(--text); background: var(--surface-2); padding: 6px 8px; border-radius: 6px; font-size: 11.5px; }
+.tip-label { font-family: var(--font-mono); font-size: 12px; fill: var(--text); }
+.tip-sub { font-family: var(--font-sans); font-size: 10px; fill: var(--text-3); }

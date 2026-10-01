@@ -117,6 +117,8 @@ export type ModelSummary = {
   task: string | null;
   primary: string;
   higher_is_better: boolean;
+  watch: string[];
+  descriptions: Record<string, string>;
   versions: number;
   production: number | null;
   updated_at: string;
@@ -129,6 +131,7 @@ export type ModelVersion = {
   run_id: string;
   trained_on: string[];
   evaluations: Record<string, Record<string, number>>;
+  confusion: Record<string, { labels: string[]; matrix: (number | null)[][]; rows?: string; columns?: string }>;
 };
 
 export type ModelEvent = {
@@ -182,4 +185,6 @@ export const production = {
   metrics: (project: string, minutes: number) =>
     request<LiveMetrics>(`/api/production/${project}/metrics?minutes=${minutes}`),
   logs: (project: string) => request<{ logs: string }>(`/api/production/${project}/logs`),
+  frameUrl: (project: string, view: "input" | "source", t: number) =>
+    `/api/production/${project}/frame?view=${view}&width=960&t=${t}`,
 };

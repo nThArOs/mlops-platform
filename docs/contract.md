@@ -63,6 +63,7 @@ constraints:
 | `metrics.primary` | yes | Metric used to compare models and decide promotion, as a flattened key: `mean.HOTA` for a `HOTA` value inside a `mean` object |
 | `metrics.higher_is_better` | yes | Direction of the primary metric |
 | `metrics.watch` | no | Metrics shown on dashboards and checked by alert rules |
+| `metrics.descriptions` | no | Plain-language explanation per metric key, shown in the UI info tips; common metrics are already described |
 | `constraints` | no | Limits per hardware profile; a model that exceeds them is never promoted |
 
 ## Placeholders
@@ -101,6 +102,7 @@ The command runs with `sh -c` in the project image, with the project root mounte
 - `outputs` values are glob patterns relative to the project root. Only files written during the run are collected.
 - `metrics` files are logged as metrics; any other key (`model`, ...) is logged as artifacts under that name.
 - Metrics files are flat or nested JSON. Numeric leaves are logged; a `hardware` object, if present, is stored with the run.
+- A top-level `confusion_matrix` object is stored with the evaluation and shown as a heatmap: `{"labels": [...], "matrix": [[...]], "rows": "ground truth", "columns": "prediction"}`. Use `null` for cells that are not measured.
 
 ## Benchmark JSON
 
@@ -136,3 +138,6 @@ The service exposes Prometheus metrics on `GET /metrics`:
 | `inference_requests_total`, `inference_errors_total` | counter | yes |
 | `predictions_per_input` | histogram | no |
 | `prediction_confidence` | histogram | no |
+| `stage_latency_seconds{stage}` | histogram | no |
+
+`GET /frame.jpg?view=input|source&width=N`, optional, returns the last processed frame with its predictions drawn. The UI polls it only while the live view is open.

@@ -22,7 +22,7 @@ export function Badge({ tone, dot, children }: { tone?: "success" | "warning" | 
   );
 }
 
-export function Stat({ label, value }: { label: string; value: ReactNode }) {
+export function Stat({ label, value }: { label: ReactNode; value: ReactNode }) {
   return (
     <div className="stat">
       <div className="label">{label}</div>
