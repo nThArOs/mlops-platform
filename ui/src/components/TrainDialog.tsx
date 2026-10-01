@@ -82,7 +82,9 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
     if (!o || registry.loading) return;
     setConfig((c) => c ?? o.entrypoints.train?.config ?? o.configs[0] ?? null);
     setProfile((p) => p || o.default_profile);
-  }, [o, registry.loading]);
+    setPicked((p) => (Object.keys(p).length ? p
+      : Object.fromEntries(o.datasets.map((d) => [d.name, history[d.name]?.latest ?? ""]))));
+  }, [o, registry.loading, history]);
   const others = (registered.data ?? [])
     .filter((d) => !o?.datasets.some((x) => x.name === d.name))
     .map((d) => ({ name: d.name, version: d.version, license: d.license }));
@@ -171,7 +173,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
             history={registry.loading ? undefined : history} others={others} help={
               <Help title="Datasets">
                 <span>Checked datasets are mounted read-only where the project expects them. The run is linked to these exact versions, so the new model always knows what it was trained on.</span>
-                <span>Nothing is checked by default: choose the data of this run. The right column shows the versions production and the latest trained version used.</span>
+                <span>Starts with the datasets of the latest training, so a new run uses the same data unless you check or uncheck one. The right column shows the versions production and the latest trained version used.</span>
                 <span>Mounting only makes the data available: the project code decides which folders it reads.</span>
               </Help>} />
 
