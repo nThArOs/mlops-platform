@@ -2,6 +2,20 @@
 
 Model-agnostic MLOps platform: datasets, training runs, model registry, retraining, live monitoring and edge benchmarks. A project plugs in with a `project.yaml` ([contract](docs/contract.md)). Scope and roadmap: [spec](docs/spec.md).
 
+## Screenshots
+
+Production service of a drone detector on CPU, with live metrics, the last offline evaluation and the frame seen by the model:
+
+![Production](docs/screenshots/production.png)
+
+| Model versions, confusion matrix and computed scores | Models grouped by project |
+| --- | --- |
+| ![Model](docs/screenshots/model.png) | ![Models](docs/screenshots/models.png) |
+
+| Dataset version, splits and lineage | Datasets |
+| --- | --- |
+| ![Dataset](docs/screenshots/dataset.png) | ![Datasets](docs/screenshots/datasets.png) |
+
 ## Start
 
 ```bash
