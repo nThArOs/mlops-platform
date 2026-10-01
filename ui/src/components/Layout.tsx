@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { production } from "../api";
+import { jobs, production } from "../api";
 import { Activity, Box, Database, ListChecks, Moon, Sun } from "lucide-react";
 
 type Theme = "light" | "dark";
@@ -25,6 +25,16 @@ const nav: { to: string; label: string; icon: typeof Box; soon?: boolean }[] = [
 export default function Layout() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [alertCount, setAlertCount] = useState(0);
+  const [queue, setQueue] = useState({ running: 0, waiting: 0 });
+
+  useEffect(() => {
+    const load = () => jobs.queue()
+      .then((q) => setQueue({ running: q.running.length, waiting: q.queued.length }))
+      .catch(() => setQueue({ running: 0, waiting: 0 }));
+    load();
+    const id = setInterval(load, 15000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const load = () => production.alerts().then((a) => setAlertCount(a.length)).catch(() => setAlertCount(0));
@@ -52,6 +62,12 @@ export default function Layout() {
             <Icon size={16} strokeWidth={1.6} aria-hidden="true" />
             {label}
             {soon && <span className="soon">soon</span>}
+            {to === "/runs" && queue.running + queue.waiting > 0 && (
+              <span className="nav-jobs" title={`${queue.running} running, ${queue.waiting} waiting`}>
+                {queue.running > 0 && <span className="nav-pulse" aria-hidden="true" />}
+                {queue.running + queue.waiting}
+              </span>
+            )}
             {to === "/production" && alertCount > 0 && <span className="nav-count" aria-label={`${alertCount} alerts`}>{alertCount}</span>}
           </NavLink>
         ))}

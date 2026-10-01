@@ -4,6 +4,7 @@ import { ArrowLeft, Square } from "lucide-react";
 import { jobs, models, type Job } from "../api";
 import InfoTip from "../components/InfoTip";
 import LineChart from "../components/LineChart";
+import ProgressBar, { clock, duration as span } from "../components/Progress";
 import { Badge, Loading, Note, Stat } from "../components/ui";
 import { ago, date } from "../lib/format";
 import { useFetch } from "../lib/useFetch";
@@ -26,6 +27,50 @@ function duration(job: Job): string {
 
 const label = (job: Job) => (job.entrypoint === "evaluate" ? job.spec.model ?? job.model : job.spec.variant ?? job.spec.config?.split("/").pop());
 
+function QueuePanel() {
+  const navigate = useNavigate();
+  const q = useFetch(jobs.queue, []);
+  useEffect(() => {
+    const id = setInterval(q.reload, 5000);
+    return () => clearInterval(id);
+  }, [q.reload]);
+  if (!q.data || (!q.data.running.length && !q.data.queued.length)) return null;
+  return (
+    <div className="queue">
+      {q.data.running.map((j) => (
+        <div key={j.id} className="panel queue-running link" onClick={() => navigate(`/runs/${j.id}`)}>
+          <div className="status-line" style={{ marginBottom: 10 }}>
+            {statusBadge(j.status)}
+            <span className="mono">#{j.id}</span>
+            <span className="mono">{j.model}</span>
+            <Badge>{j.entrypoint}</Badge>
+            <span className="muted mono">{label(j)}</span>
+          </div>
+          <ProgressBar progress={j.progress} />
+        </div>
+      ))}
+      {q.data.queued.length > 0 && (
+        <div className="panel" style={{ padding: "6px 0" }}>
+          <div className="nav-label" style={{ padding: "8px 16px 4px" }}>waiting, in order</div>
+          {q.data.queued.map((j, i) => (
+            <div key={j.id} className="queue-row link" onClick={() => navigate(`/runs/${j.id}`)}>
+              <span className="mono faint">{i + 1}</span>
+              <span className="mono">#{j.id}</span>
+              <span className="mono">{j.model}</span>
+              <Badge>{j.entrypoint}</Badge>
+              <span className="muted mono">{label(j)}</span>
+              <span className="faint" style={{ marginLeft: "auto", textAlign: "right" }}>
+                {j.starts_at ? <>starts around {clock(j.starts_at)}</> : "start time unknown"}
+                {j.estimate_s ? <> · usually {span(j.estimate_s)}</> : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RunsList() {
   const navigate = useNavigate();
   const list = useFetch(() => jobs.list(), []);
@@ -43,6 +88,7 @@ export function RunsList() {
           <div className="subtitle">Trainings and evaluations started from the platform, run one at a time.</div>
         </div>
       </div>
+      <QueuePanel />
       {list.loading && !list.data && <Loading />}
       {list.error && <Note kind="error">{list.error}</Note>}
       {list.data && list.data.length === 0 && (
@@ -248,6 +294,7 @@ export function RunPage() {
         )}
       </div>
       {error && <Note kind="error">{error}</Note>}
+      {active && j.status !== "queued" && <div className="panel" style={{ padding: "14px 16px", marginBottom: 18 }}><ProgressBar progress={j.progress} /></div>}
       {j.error && j.status === "failed" && <Note kind="error">{j.error}. See the log below.</Note>}
       {j.spec.note && <p className="muted" style={{ marginTop: 0 }}>Triggered automatically: {j.spec.note}.</p>}
       {j.result?.auto_promotion && (

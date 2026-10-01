@@ -6,6 +6,7 @@ import { jobs, models, type ModelEvent, type ModelSummary, type PromotionCheck }
 import Benchmarks from "../components/Benchmarks";
 import VersionDetails from "../components/VersionDetails";
 import InfoTip from "../components/InfoTip";
+import ProgressBar from "../components/Progress";
 import TrainDialog from "../components/TrainDialog";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
 import { date } from "../lib/format";
@@ -137,6 +138,34 @@ function Interval({ range }: { range?: [number, number] }) {
     <span className="interval" title="95 % interval when the evaluation sequences are resampled">
       {metric(range[0])}–{metric(range[1])}
     </span>
+  );
+}
+
+export function RunningBanner({ model }: { model: string }) {
+  const navigate = useNavigate();
+  const list = useFetch(() => jobs.list(model), [model]);
+  useEffect(() => {
+    const id = setInterval(list.reload, 10000);
+    return () => clearInterval(id);
+  }, [list.reload]);
+  const running = list.data?.filter((j) => j.status === "running") ?? [];
+  const waiting = list.data?.filter((j) => j.status === "queued").length ?? 0;
+  if (!running.length && !waiting) return null;
+  return (
+    <div className="panel link" style={{ padding: "14px 16px", marginBottom: 24 }}
+      onClick={() => navigate(running[0] ? `/runs/${running[0].id}` : "/runs")}>
+      {running.map((j) => (
+        <div key={j.id}>
+          <div className="status-line" style={{ marginBottom: 8 }}>
+            <Badge tone="warning" dot>{j.entrypoint} running</Badge>
+            <span className="mono">#{j.id}</span>
+            <span className="muted mono">{j.entrypoint === "train" ? j.spec.variant ?? j.spec.config : j.spec.model}</span>
+          </div>
+          <ProgressBar progress={j.progress} compact />
+        </div>
+      ))}
+      {waiting > 0 && <p className="faint" style={{ margin: running.length ? "8px 0 0" : 0, fontSize: 12.5 }}>{waiting} more waiting in the queue for this model.</p>}
+    </div>
   );
 }
 
@@ -274,6 +303,7 @@ export default function ModelPage() {
       </div>
 
       {message && <div style={{ marginBottom: 16 }}><Note kind="success">{message}</Note></div>}
+      <RunningBanner model={project} />
 
       <div className="section-head">
         <h2 className="section-title">Versions</h2>

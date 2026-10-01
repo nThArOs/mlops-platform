@@ -218,6 +218,22 @@ export const production = {
     `/api/production/${project}/frame?view=${view}&width=960&t=${t}`,
 };
 
+export type JobProgress = {
+  fraction: number | null;
+  label: string;
+  phase?: string;
+  epoch?: number;
+  epochs?: number;
+  elapsed_s: number | null;
+  remaining_s: number | null;
+};
+
+export type QueueState = {
+  running: Job[];
+  queued: (Job & { estimate_s: number | null; starts_at: number | null; ends_at: number | null })[];
+  now: number;
+};
+
 export type JobStatus = "queued" | "running" | "cancelling" | "finished" | "failed" | "cancelled";
 
 export type Job = {
@@ -249,6 +265,7 @@ export type Job = {
   error: string | null;
   parent_id: number | null;
   children?: number[];
+  progress?: JobProgress | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -287,6 +304,7 @@ export const jobs = {
     request<Record<string, unknown>>(`/api/projects/${project}/config?path=${encodeURIComponent(path)}`),
   create: (body: JobRequest) => request<Job>("/api/jobs", json(body)),
   list: (model?: string) => request<Job[]>(`/api/jobs${model ? `?model=${encodeURIComponent(model)}` : ""}`),
+  queue: () => request<QueueState>("/api/queue"),
   get: (id: number) => request<Job>(`/api/jobs/${id}`),
   log: (id: number, offset: number) => request<{ text: string; offset: number }>(`/api/jobs/${id}/log?offset=${offset}`),
   cancel: (id: number) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),

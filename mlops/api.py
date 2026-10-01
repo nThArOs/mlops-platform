@@ -301,12 +301,17 @@ def create_job(body: JobSpec):
 
 @app.get("/api/jobs")
 def list_jobs(model: str | None = None, limit: int = 50):
-    return jobs.list_jobs(model, min(limit, 200))
+    return [jobs.with_progress(j) for j in jobs.list_jobs(model, min(limit, 200))]
+
+
+@app.get("/api/queue")
+def job_queue():
+    return jobs.queue()
 
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: int):
-    return jobs.get(job_id)
+    return jobs.with_progress(jobs.get(job_id))
 
 
 @app.get("/api/runs/{run_id}/metrics")

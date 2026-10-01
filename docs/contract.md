@@ -67,6 +67,7 @@ constraints:
 | `entrypoints.train` | yes | Produces a model and a metrics JSON |
 | `entrypoints.evaluate` | yes | Produces a metrics JSON for a model and a dataset |
 | `entrypoints.benchmark` | no | Produces latency and resource metrics; a generic ONNX benchmark is used if absent |
+| `entrypoints.<name>.progress` | no | Regexes read on the log to show progress: `epoch` and `step`, each with two groups (done, total). Ultralytics training lines and `[done/total]` markers are understood without it |
 | `entrypoints.serve` | no | HTTP service; required for live monitoring |
 | `export.formats` | no | Model variants to benchmark |
 | `metrics.primary` | yes | Metric used to compare models and decide promotion, as a flattened key: `mean.HOTA` for a `HOTA` value inside a `mean` object |

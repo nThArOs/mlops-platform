@@ -321,3 +321,32 @@ def work(poll: float = 2.0) -> None:
         _run(job)
         print(f"job {job['id']}: {get(job['id'])['status']}", flush=True)
         _after_child(get(job["id"]))
+
+
+def with_progress(job: dict) -> dict:
+    if job["status"] not in ("running", "cancelling"):
+        return job
+    from . import progress
+
+    return {**job, "progress": progress.running(job, log(job["id"], -1, limit=40_000)["text"])}
+
+
+def queue() -> dict:
+    from . import progress
+
+    with db.engine().connect() as conn:
+        rows = [dict(r) for r in conn.execute(sa.select(db.jobs).where(db.jobs.c.status.in_(ACTIVE))
+                                              .order_by(db.jobs.c.id)).mappings()]
+    now = datetime.now(timezone.utc).timestamp()
+    running = [with_progress(r) for r in rows if r["status"] != "queued"]
+    cursor = now
+    for r in running:
+        remaining = (r.get("progress") or {}).get("remaining_s")
+        cursor = cursor + remaining if remaining is not None and cursor is not None else None
+    queued = []
+    for r in (r for r in rows if r["status"] == "queued"):
+        typical = progress.typical_duration(r)
+        queued.append({**r, "estimate_s": typical, "starts_at": cursor,
+                       "ends_at": cursor + typical if cursor is not None and typical else None})
+        cursor = cursor + typical if cursor is not None and typical else None
+    return {"running": running, "queued": queued, "now": now}
