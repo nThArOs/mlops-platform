@@ -1,0 +1,16 @@
+# Docker-limited profiles approximate embedded targets on x86; results are marked as estimated.
+profiles:
+  pc-cpu:
+    runner: local
+  edge-medium:
+    runner: local
+    cpus: 4
+    memory: 4g
+  edge-small:
+    runner: local
+    cpus: 2
+    memory: 2g
+  edge-tiny:
+    runner: local
+    cpus: 1
+    memory: 1g
