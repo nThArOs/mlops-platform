@@ -317,3 +317,9 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .check-row + .check-row { border-top: 1px solid var(--border); }
 .check-row.ok .check-mark { color: var(--success); }
 .check-row.ko .check-mark { color: var(--danger); }
+
+.drift-bars { display: flex; align-items: flex-end; gap: 6px; height: 110px; padding-top: 6px; }
+.drift-bucket { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; min-width: 0; }
+.drift-pair { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.drift-pair span { width: 40%; max-width: 12px; border-radius: 3px 3px 0 0; min-height: 1px; }
+.drift-label { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }

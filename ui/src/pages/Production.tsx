@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Play, Square } from "lucide-react";
 import { models, production, type Deployment, type LiveMetrics } from "../api";
+import Drift from "../components/Drift";
 import InfoTip from "../components/InfoTip";
 import LineChart from "../components/LineChart";
 import { Badge, Loading, Note, Stat } from "../components/ui";
@@ -295,6 +296,13 @@ export function ProductionService() {
         {metrics.data && <Charts metrics={metrics.data} />}
         <p className="faint" style={{ fontSize: 12.5, marginTop: 16 }}>Refreshed every 10 seconds from Prometheus.</p>
       </div>
+
+      {d?.running && (
+        <div className="section">
+          <div className="section-head"><h2 className="section-title">Drift</h2></div>
+          <Drift project={project} />
+        </div>
+      )}
 
       {d?.running && (
         <div className="section">

@@ -82,6 +82,15 @@ const G: Record<string, Entry> = {
     what: "Share of annotated objects found, split by their size in pixels (square root of the box area). Far drones are small.",
     better: "higher",
   },
+  psi: {
+    title: "Population stability index",
+    what: "How much a distribution moved between two periods. Sums, over buckets, the change in share weighted by its log ratio. Works without labels.",
+    formula: "PSI = Σ (cur − ref) · ln(cur / ref)",
+  },
+  input_motion_magnitude: { title: "Motion magnitude", what: "Mean length of the encoder motion vectors per frame. Rises with camera shake, wind or a busier scene." },
+  input_residual_energy: { title: "Residual energy", what: "Mean absolute residual per frame: what motion compensation could not predict. Rises with noise, lighting changes or new textures." },
+  input_brightness: { title: "Brightness", what: "Mean luma of the frames. Tracks time of day, weather and exposure changes." },
+  prediction_confidence: { title: "Prediction confidence", what: "Scores the model gives to its detections. A shift often comes before a drop in accuracy." },
   confusion: {
     title: "Confusion matrix",
     what: "Rows are what was really there, columns what the model predicted. The diagonal is correct; the background row holds false alarms and the background column holds misses.",

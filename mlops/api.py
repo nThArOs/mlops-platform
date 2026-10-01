@@ -223,6 +223,11 @@ def service_frame(project: str, view: str = "input", width: int = 960):
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/production/{project}/drift")
+def service_drift(project: str, window: int = 30):
+    return deploy.drift(project, max(2, min(window, 24 * 60)))
+
+
 @app.get("/api/production/{project}/logs")
 def service_logs(project: str, tail: int = 200):
     return {"logs": deploy.logs(project, min(tail, 2000))}

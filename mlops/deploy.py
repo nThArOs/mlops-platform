@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -226,3 +227,67 @@ def live_metrics(project: str, minutes: int = 60, step: int = 15) -> dict:
     out["stages_ms"] = {r["metric"].get("stage", "?"): _finite([[float(t), float(v)] for t, v in r["values"]])
                         for r in data.get("data", {}).get("result", [])}
     return out
+
+
+DRIFT_FAMILIES = ("prediction_confidence", "predictions_per_input")
+
+
+def _histogram_at(name: str, project: str, at: float, window: int) -> list[tuple[str, float]]:
+    data = _prometheus("/api/v1/query", {
+        "query": f'sum by (le) (increase({name}_bucket{{project="{project}"}}[{window}s]))', "time": at})
+    rows = [(r["metric"]["le"], float(r["value"][1])) for r in data.get("data", {}).get("result", [])]
+    rows.sort(key=lambda r: float("inf") if r[0] == "+Inf" else float(r[0]))
+    counts, previous = [], 0.0
+    for le, cumulative in rows:
+        counts.append((le, max(cumulative - previous, 0.0)))
+        previous = max(cumulative, previous)
+    return counts
+
+
+def _timestamp(value: str) -> float:
+    from datetime import datetime, timezone
+
+    m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?", value)
+    base = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+    return base + float(m.group(2) or 0)
+
+
+def psi(reference: list[float], current: list[float], eps: float = 1e-4) -> float:
+    import math
+
+    r_total, c_total = sum(reference) or 1, sum(current) or 1
+    out = 0.0
+    for r, c in zip(reference, current):
+        a, b = max(r / r_total, eps), max(c / c_total, eps)
+        out += (b - a) * math.log(b / a)
+    return out
+
+
+def drift(project: str, window_minutes: int = 30) -> dict:
+    st = status(project)
+    if not st.get("running"):
+        raise ContractError(f"{project} is not running")
+    started = _timestamp(st["started_at"])
+    now = time.time()
+    window = int(min(window_minutes * 60, (now - started) / 2))
+    if window < 120:
+        return {"ready": False, "detail": "the service needs a few more minutes of history", "features": []}
+    names = _prometheus("/api/v1/label/__name__/values", {"match[]": f'{{project="{project}"}}'}).get("data", [])
+    families = sorted({n[:-7] for n in names if n.endswith("_bucket")
+                       and (n.startswith("input_") or n[:-7] in DRIFT_FAMILIES)})
+    features, idle = [], []
+    for name in families:
+        ref = _histogram_at(name, project, started + window, window)
+        cur = _histogram_at(name, project, now, window)
+        if not ref or not cur or sum(c for _, c in ref) == 0 or sum(c for _, c in cur) == 0:
+            idle.append(name)
+            continue
+        value = psi([c for _, c in ref], [c for _, c in cur])
+        features.append({
+            "name": name, "psi": round(value, 4),
+            "level": "stable" if value < 0.1 else "moderate" if value < 0.25 else "significant",
+            "buckets": [le for le, _ in ref],
+            "reference": [round(c, 1) for _, c in ref], "current": [round(c, 1) for _, c in cur],
+        })
+    return {"ready": True, "window_minutes": round(window / 60, 1), "reference_start": started,
+            "features": features, "no_data": idle}
