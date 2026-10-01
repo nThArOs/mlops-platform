@@ -19,6 +19,15 @@ from .run import CONTAINER_MODEL_DIR, image_id, load_profile, render_command
 LABEL = "mlops.project"
 
 
+def free_port() -> int:
+    # an explicit host port survives container restarts, an ephemeral one changes and loses Prometheus
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def container_name(key: str) -> str:
     return "mlops-serve-" + key.replace(".", "-")
 
@@ -159,7 +168,7 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
     args = ["run", "-d", "--name", container_name(project), "--restart", "unless-stopped",
             "--label", f"{LABEL}={project}", "--label", f"mlops.version={version}",
             "--label", f"mlops.profile={profile_name}",
-            "-p", f"127.0.0.1:{previous.get('port') or ''}:{ep.port}",
+            "-p", f"127.0.0.1:{previous.get('port') or free_port()}:{ep.port}",
             "-v", f"{spec.root}:{spec.workdir}:ro", "-v", f"{mount}:{CONTAINER_MODEL_DIR}:ro",
             "-w", spec.workdir, "-e", f"MLOPS_PROFILE={profile_name}"]
     if profile.get("cpus"):
