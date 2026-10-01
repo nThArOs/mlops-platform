@@ -283,3 +283,15 @@ dialog.modal::backdrop { background: var(--overlay); }
   font-size: 10.5px; font-family: var(--font-mono); background: color-mix(in srgb, currentColor 14%, transparent);
 }
 .cm td { min-width: 112px; height: 60px; }
+
+.cm-layout { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+.cm td.lit { outline: 2px solid var(--text); outline-offset: -2px; }
+.derived { display: flex; flex-direction: column; gap: 14px; min-width: 300px; flex: 1; }
+.derived-class { display: flex; flex-direction: column; gap: 2px; }
+.derived-row {
+  display: grid; grid-template-columns: 96px 1fr; column-gap: 12px; row-gap: 1px; padding: 8px 10px;
+  border-radius: var(--radius); cursor: default;
+}
+.derived-row:hover, .derived-row:focus-visible { background: var(--hover); outline: none; }
+.derived-name { grid-row: span 3; color: var(--text); display: inline-flex; align-items: flex-start; }
+.derived-value { color: var(--text); font-size: 14px; }
