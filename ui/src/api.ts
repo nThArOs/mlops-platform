@@ -132,6 +132,7 @@ export type ModelVersion = {
   version: number;
   status: string;
   variant: string | null;
+  parent: string | null;
   description: string | null;
   aliases: string[];
   run_id: string;
@@ -263,6 +264,8 @@ export type JobRequest = {
   model?: string;
   auto_evaluate?: boolean;
   eval_datasets?: string[];
+  values?: Record<string, string>;
+  benchmark_profiles?: string[];
   note?: string;
 };
 

@@ -298,7 +298,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         mlflow.end_run(status)
 
     if status == "FINISHED" and outputs.get("model"):
-        version = models.register(key, run_id, variant or (config_host.stem if config_host else None))
+        version = models.register(key, run_id, variant or (config_host.stem if config_host else None),
+                                  registry_model[1] if registry_model else None)
         print(f"registered {key}@v{version} (candidate)")
     if status == "FINISHED" and entrypoint == "benchmark" and registry_model and all_metrics:
         models.record_benchmark(registry_model[0], registry_model[1], run_id, profile_name, all_metrics,

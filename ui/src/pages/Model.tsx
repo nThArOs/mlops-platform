@@ -291,7 +291,10 @@ export default function ModelPage() {
             return (
               <tr key={v.version}>
                 <td className="mono" title={v.description ?? undefined}>v{v.version}</td>
-                <td>{v.variant ? <span className="mono muted">{v.variant}</span> : <span className="faint">–</span>}</td>
+                <td>
+                  {v.variant ? <span className="mono muted">{v.variant}</span> : <span className="faint">–</span>}
+                  {v.parent && <span className="faint" style={{ display: "block", fontSize: 11.5 }}>from {v.parent}</span>}
+                </td>
                 <td>{statusBadge(v.status)}</td>
                 <td>
                   {v.trained_on.length === 0 && <span className="faint">unknown</span>}
@@ -358,7 +361,8 @@ export default function ModelPage() {
           dataset={dataset && versions.find((v) => v.version === promoting)?.evaluations[dataset] ? dataset : null}
           onClose={() => setPromoting(null)} onDone={done} />
       )}
-      {training && meta && <TrainDialog project={meta.project} slot={meta.slot} onClose={() => setTraining(false)} />}
+      {training && meta && <TrainDialog project={meta.project} slot={meta.slot} benchProfiles={Object.keys(meta.constraints)}
+        onClose={() => setTraining(false)} />}
       {rollingBack && <RollbackDialog project={project} onClose={() => setRollingBack(false)} onDone={done} />}
     </>
   );

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jobs, models } from "../api";
 import { useFetch } from "../lib/useFetch";
+import { ProfilePicker } from "./Benchmarks";
 import { Field, Loading, Modal, Note } from "./ui";
 
 type Flat = Record<string, unknown>;
@@ -38,7 +39,12 @@ function coerce(raw: string, original: unknown): unknown {
 
 const show = (v: unknown) => (Array.isArray(v) ? JSON.stringify(v) : String(v ?? ""));
 
-export default function TrainDialog({ project, slot, onClose }: { project: string; slot: string | null; onClose: () => void }) {
+export default function TrainDialog({ project, slot, benchProfiles = [], onClose }: {
+  project: string;
+  slot: string | null;
+  benchProfiles?: string[];
+  onClose: () => void;
+}) {
   const navigate = useNavigate();
   const options = useFetch(() => jobs.options(project), [project]);
   const key = slot ? `${project}.${slot}` : project;
@@ -51,6 +57,7 @@ export default function TrainDialog({ project, slot, onClose }: { project: strin
   const [profile, setProfile] = useState("");
   const [variant, setVariant] = useState("");
   const [evaluate, setEvaluate] = useState(true);
+  const [bench, setBench] = useState<string[]>(benchProfiles);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -89,7 +96,7 @@ export default function TrainDialog({ project, slot, onClose }: { project: strin
         project, slot, entrypoint: "train", config,
         params: unflatten(Object.fromEntries(changed.map(([k, v]) => [k, coerce(v, flat[k])]))),
         datasets: refs, profile, variant: variant.trim() || undefined,
-        auto_evaluate: evaluate, eval_datasets: evalRefs.length ? evalRefs : refs,
+        auto_evaluate: evaluate, eval_datasets: evalRefs.length ? evalRefs : refs, benchmark_profiles: bench,
       });
       navigate(`/runs/${job.id}`);
     } catch (e) {
@@ -184,6 +191,7 @@ export default function TrainDialog({ project, slot, onClose }: { project: strin
               ))}
             </div>
           )}
+          <ProfilePicker profiles={o.profiles.map((p) => p.name)} picked={bench} onChange={setBench} />
           {error && <Note kind="error">{error}</Note>}
         </>
       )}

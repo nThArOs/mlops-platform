@@ -37,7 +37,7 @@ def resolve(ref: str) -> tuple[str, int]:
         raise ContractError(f"no model version with alias {target} for {name}")
 
 
-def register(project: str, run_id: str, variant: str | None = None) -> int:
+def register(project: str, run_id: str, variant: str | None = None, parent: int | None = None) -> int:
     c = client()
     try:
         c.create_registered_model(project)
@@ -49,6 +49,8 @@ def register(project: str, run_id: str, variant: str | None = None) -> int:
     c.set_model_version_tag(project, str(version), "status", CANDIDATE)
     if variant:
         c.set_model_version_tag(project, str(version), "variant", variant)
+    if parent:
+        c.set_model_version_tag(project, str(version), "parent", f"v{parent}")
     c.set_registered_model_alias(project, CANDIDATE, str(version))
     return version
 
@@ -168,6 +170,7 @@ def list_versions(project: str) -> list[dict]:
             "version": version,
             "status": mv.tags.get("status", ""),
             "variant": mv.tags.get("variant"),
+            "parent": mv.tags.get("parent"),
             "description": mv.description or None,
             "aliases": aliases.get(version, []),
             "run_id": mv.run_id,

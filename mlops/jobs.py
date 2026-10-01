@@ -140,6 +140,8 @@ def _command(job: dict) -> list[str]:
     for flag in ("profile", "variant", "model"):
         if spec.get(flag):
             cmd += [f"--{flag}", str(spec[flag])]
+    for key, value in (spec.get("values") or {}).items():
+        cmd += ["--set", f"{key}={value}"]
     return cmd
 
 
@@ -181,11 +183,17 @@ def _run(job: dict) -> None:
     _update(job["id"], status="finished" if ok else "failed", run_id=info.get("run_id"), result=info,
             error=None if ok else f"exit code {proc.returncode}", finished_at=_now())
     spec = job["spec"]
-    if ok and job["entrypoint"] == "train" and spec.get("auto_evaluate") and info.get("registered"):
-        reg = info["registered"]
-        create({"project": job["project"], "slot": split_key(job["model"])[1], "entrypoint": "evaluate",
-                "model": f"{reg['model']}@v{reg['version']}", "datasets": spec.get("eval_datasets", []),
-                "profile": spec.get("profile")}, parent_id=job["id"])
+    reg = info.get("registered")
+    if not ok or not reg:
+        return
+    ref = f"{reg['model']}@v{reg['version']}"
+    slot = split_key(job["model"])[1]
+    if spec.get("auto_evaluate"):
+        create({"project": job["project"], "slot": slot, "entrypoint": "evaluate", "model": ref,
+                "datasets": spec.get("eval_datasets", [])}, parent_id=job["id"])
+    for profile in spec.get("benchmark_profiles") or []:
+        create({"project": job["project"], "slot": slot, "entrypoint": "benchmark", "model": ref,
+                "profile": profile}, parent_id=job["id"])
 
 
 def _kill(proc: subprocess.Popen, log_path: Path) -> None:

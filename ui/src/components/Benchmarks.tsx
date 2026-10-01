@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Gauge } from "lucide-react";
+import { Gauge, PackageOpen } from "lucide-react";
 import { jobs, type ModelSummary, type ModelVersion } from "../api";
 import { useFetch } from "../lib/useFetch";
 import InfoTip from "./InfoTip";
@@ -68,6 +68,83 @@ function BenchmarkDialog({ meta, versions, onClose }: { meta: ModelSummary; vers
   );
 }
 
+function ExportDialog({ meta, versions, onClose }: { meta: ModelSummary; versions: ModelVersion[]; onClose: () => void }) {
+  const navigate = useNavigate();
+  const exportable = versions.filter((v) => !v.parent);
+  const [version, setVersion] = useState(String(meta.production ?? exportable[exportable.length - 1]?.version ?? ""));
+  const [format, setFormat] = useState("onnx-int8");
+  const [evaluate, setEvaluate] = useState(true);
+  const [bench, setBench] = useState<string[]>(Object.keys(meta.constraints));
+  const [error, setError] = useState<string | null>(null);
+  const options = useFetch(() => jobs.options(meta.project), [meta.project]);
+  const prod = versions.find((v) => v.version === meta.production);
+
+  async function submit() {
+    const source = versions.find((v) => String(v.version) === version);
+    const suffix = format === "onnx" ? "onnx" : "int8";
+    try {
+      const job = await jobs.create({
+        project: meta.project, slot: meta.slot, entrypoint: "export", model: meta.name + "@v" + version, datasets: [],
+        values: { format }, variant: (source?.variant ?? "v" + version) + "-" + suffix,
+        auto_evaluate: evaluate, eval_datasets: Object.keys(prod?.evaluations ?? {}), benchmark_profiles: bench,
+      });
+      navigate("/runs/" + job.id);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  if (options.data && !options.data.entrypoints.export) {
+    return (
+      <Modal open onClose={onClose} title="Export a version" footer={<button className="btn" onClick={onClose}>Close</button>}>
+        <Note>This project declares no export entrypoint.</Note>
+      </Modal>
+    );
+  }
+  return (
+    <Modal open onClose={onClose} title="Export a version"
+      subtitle="The export becomes a new version linked to its source, so it can be evaluated, benchmarked and promoted like any other."
+      footer={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={submit}>Queue export</button></>}>
+      <div className="form-grid">
+        <Field label="Source version">
+          <select className="select mono" value={version} onChange={(e) => setVersion(e.target.value)}>
+            {[...exportable].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version}{v.variant ? " · " + v.variant : ""}</option>)}
+          </select>
+        </Field>
+        <Field label="Format" hint="INT8 is calibrated on training frames; check its accuracy before promoting it.">
+          <select className="select mono" value={format} onChange={(e) => setFormat(e.target.value)}>
+            <option value="onnx">ONNX, float32</option>
+            <option value="onnx-int8">ONNX, INT8 quantized</option>
+          </select>
+        </Field>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={evaluate} onChange={(e) => setEvaluate(e.target.checked)} />
+        Evaluate on the datasets production was evaluated on
+      </label>
+      <ProfilePicker profiles={options.data?.profiles.map((p) => p.name) ?? []} picked={bench} onChange={setBench} />
+      {error && <Note kind="error">{error}</Note>}
+    </Modal>
+  );
+}
+
+export function ProfilePicker({ profiles, picked, onChange }: { profiles: string[]; picked: string[]; onChange: (p: string[]) => void }) {
+  return (
+    <div className="field">
+      <span className="field-label">Benchmark on</span>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        {profiles.map((name) => (
+          <label key={name} className="check">
+            <input type="checkbox" checked={picked.includes(name)}
+              onChange={(e) => onChange(e.target.checked ? [...picked, name] : picked.filter((x) => x !== name))} />
+            <span className="mono">{name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Scatter({ points, primary }: { points: { label: string; x: number; y: number; ok: boolean }[]; primary: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(520);
@@ -109,6 +186,7 @@ function Scatter({ points, primary }: { points: { label: string; x: number; y: n
 
 export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSummary; versions: ModelVersion[]; dataset: string | null }) {
   const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const rows = versions.flatMap((v) => Object.entries(v.benchmarks ?? {}).map(([profile, b]) => ({ v, profile, b })));
   const profiles = [...new Set(rows.map((r) => r.profile))];
   const [profile, setProfile] = useState<string | null>(null);
@@ -120,7 +198,10 @@ export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSum
     <div className="section">
       <div className="section-head">
         <h2 className="section-title">Edge benchmarks<InfoTip metric="latency" /></h2>
-        <button className="btn small" onClick={() => setOpen(true)}><Gauge size={13} /> Benchmark</button>
+        <span style={{ display: "flex", gap: 8 }}>
+          <button className="btn small" onClick={() => setExporting(true)}><PackageOpen size={13} /> Export</button>
+          <button className="btn small" onClick={() => setOpen(true)}><Gauge size={13} /> Benchmark</button>
+        </span>
       </div>
       {Object.keys(meta.constraints).length > 0 && (
         <p className="muted" style={{ marginTop: 0 }}>
@@ -174,6 +255,7 @@ export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSum
         </>
       )}
       {open && <BenchmarkDialog meta={meta} versions={versions} onClose={() => setOpen(false)} />}
+      {exporting && <ExportDialog meta={meta} versions={versions} onClose={() => setExporting(false)} />}
     </div>
   );
 }

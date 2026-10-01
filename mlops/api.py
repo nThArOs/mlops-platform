@@ -279,6 +279,8 @@ class JobSpec(BaseModel):
     model: str | None = None
     auto_evaluate: bool = False
     eval_datasets: list[str] = []
+    values: dict[str, str] = {}
+    benchmark_profiles: list[str] = []
     note: str | None = None
 
 
