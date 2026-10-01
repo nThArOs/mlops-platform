@@ -12,7 +12,7 @@ import yaml
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from . import datasets, db, models
+from . import cpus, datasets, db, models
 from .config import ROOT, load_config
 from .project import ContractError, Project, split_key
 
@@ -166,6 +166,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
     image = project.image_for(slot)
     img_id = image_id(image)
     hardware = host_hardware(profile_name, profile)
+    cpuset = cpus.pin(cfg, "jobs", profile.get("cpus"))
+    hardware["cpuset"] = cpuset
     save_project(project)
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", cfg["tracking_uri"]))
@@ -229,6 +231,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
                       "-e", "MLOPS_DATASETS=" + ",".join(f"{v['name']}={mount}" for v, mount in mounted)]
         if profile.get("cpus"):
             docker_cmd += ["--cpus", str(profile["cpus"])]
+        if cpuset:
+            docker_cmd += ["--cpuset-cpus", cpuset]
         if profile.get("memory"):
             docker_cmd += ["--memory", str(profile["memory"])]
         if project.shm_size:

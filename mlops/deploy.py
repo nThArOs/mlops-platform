@@ -11,7 +11,7 @@ from pathlib import Path
 
 import sqlalchemy as sa
 
-from . import db, models
+from . import cpus, db, models
 from .config import load_config, resolve
 from .project import ContractError, load_project, split_key
 from .run import CONTAINER_MODEL_DIR, image_id, load_profile, render_command
@@ -180,6 +180,7 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
     previous = status(project)
     docker("rm", "-f", container_name(project), check=False)
     port = host_port(service_dir, previous.get("port"))
+    cpuset = cpus.pin(cfg, "services", profile.get("cpus"))
     args = ["run", "-d", "--name", container_name(project), "--restart", "unless-stopped",
             "--label", f"{LABEL}={project}", "--label", f"mlops.version={version}",
             "--label", f"mlops.profile={profile_name}",
@@ -188,6 +189,8 @@ def start(project: str, version: int | None = None, profile_name: str | None = N
             "-w", spec.workdir, "-e", f"MLOPS_PROFILE={profile_name}"]
     if profile.get("cpus"):
         args += ["--cpus", str(profile["cpus"])]
+    if cpuset:
+        args += ["--cpuset-cpus", cpuset, "--label", f"mlops.cpuset={cpuset}"]
     if profile.get("memory"):
         args += ["--memory", str(profile["memory"])]
     args += ["--entrypoint", "sh", image, "-c", command]

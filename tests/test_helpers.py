@@ -46,3 +46,13 @@ def test_host_port_is_kept_across_stop_and_start(tmp_path):
     with socket.socket() as taken:
         taken.bind(("127.0.0.1", first))
         assert host_port(tmp_path, None) != first
+
+
+def test_cpu_allocation_uses_whole_free_cores():
+    from mlops.cpus import allocate, parse_cpuset
+
+    assert parse_cpuset("0,2-4") == {0, 2, 3, 4}
+    assert allocate([0, 1, 2, 3], 2, set(), 2) == "0,2"
+    assert allocate([0, 1, 2, 3], 2, {0}, 2) == "2,4"
+    assert allocate([4, 5], None, {5}, 2) == "8,9"
+    assert allocate([0, 1], 3, set(), 2) is None
