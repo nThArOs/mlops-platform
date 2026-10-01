@@ -152,3 +152,59 @@ def ref_of(version_id: int) -> str:
     with db.engine().connect() as conn:
         row = conn.execute(_version_query().where(db.dataset_versions.c.id == version_id)).mappings().first()
     return f"{row['name']}@v{row['version']}"
+
+
+def dataset_info(name: str) -> dict:
+    with db.engine().connect() as conn:
+        row = conn.execute(sa.select(db.datasets).where(db.datasets.c.name == name)).mappings().first()
+    if row is None:
+        raise ContractError(f"dataset not found: {name}")
+    return dict(row)
+
+
+def list_versions(name: str) -> list[dict]:
+    dataset = dataset_info(name)
+    v, rd = db.dataset_versions, db.run_datasets
+    runs = sa.select(rd.c.dataset_version_id, sa.func.count().label("runs")).group_by(rd.c.dataset_version_id).subquery()
+    query = (sa.select(v, sa.func.coalesce(runs.c.runs, 0).label("runs"))
+             .outerjoin(runs, runs.c.dataset_version_id == v.c.id)
+             .where(v.c.dataset_id == dataset["id"]).order_by(v.c.version.desc()))
+    with db.engine().connect() as conn:
+        return [dict(r) for r in conn.execute(query).mappings()]
+
+
+def browse(ref: str, prefix: str = "", offset: int = 0, limit: int = 200) -> dict:
+    manifest = store().load_manifest(get_version(ref)["manifest_hash"])
+    prefix = prefix.strip("/")
+    base = prefix + "/" if prefix else ""
+    dirs, files = {}, []
+    for rel, entry in manifest.items():
+        if not rel.startswith(base):
+            continue
+        head, sep, _ = rel[len(base):].partition("/")
+        if sep:
+            dirs[head] = dirs.get(head, 0) + 1
+        else:
+            files.append({"path": rel, "name": head, "size": entry["size"]})
+    files.sort(key=lambda f: f["name"])
+    return {
+        "prefix": prefix,
+        "dirs": [{"name": k, "files": n} for k, n in sorted(dirs.items())],
+        "files": files[offset:offset + limit],
+        "total_files": len(files),
+    }
+
+
+def file_path(ref: str, path: str) -> Path:
+    st = store()
+    entry = st.load_manifest(get_version(ref)["manifest_hash"]).get(path)
+    if entry is None:
+        raise ContractError(f"file not found in {ref}: {path}")
+    return st.object_path(entry["hash"])
+
+
+def archive_version(ref: str) -> None:
+    version = get_version(ref)
+    with db.engine().begin() as conn:
+        conn.execute(sa.update(db.dataset_versions).where(db.dataset_versions.c.id == version["id"])
+                     .values(archived=True))

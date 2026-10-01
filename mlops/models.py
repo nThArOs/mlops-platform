@@ -196,3 +196,37 @@ def history(project: str) -> list[dict]:
     ev = db.model_events
     with db.engine().connect() as conn:
         return [dict(r) for r in conn.execute(sa.select(ev).where(ev.c.project == project).order_by(ev.c.id)).mappings()]
+
+
+def list_projects() -> list[dict]:
+    c = client()
+    with db.engine().connect() as conn:
+        rows = [dict(r) for r in conn.execute(sa.select(db.projects).order_by(db.projects.c.name)).mappings()]
+    registered = {m.name: m for m in c.search_registered_models()}
+    out = []
+    for row in rows:
+        model = registered.get(row["name"])
+        contract = row["contract"]
+        out.append({
+            "name": row["name"],
+            "task": contract.get("task"),
+            "primary": contract["metrics"]["primary"],
+            "higher_is_better": contract["metrics"]["higher_is_better"],
+            "versions": len(c.search_model_versions(f"name='{row['name']}'")) if model else 0,
+            "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
+            "updated_at": row["updated_at"],
+        })
+    return out
+
+
+def production_dataset_ids() -> set[int]:
+    c = client()
+    ids = set()
+    rd = db.run_datasets
+    for model in c.search_registered_models():
+        if PRODUCTION not in model.aliases:
+            continue
+        run_id = c.get_model_version(model.name, model.aliases[PRODUCTION]).run_id
+        with db.engine().connect() as conn:
+            ids |= set(conn.execute(sa.select(rd.c.dataset_version_id).where(rd.c.run_id == run_id)).scalars())
+    return ids

@@ -10,7 +10,7 @@ def table(rows: list[dict], columns: list[str]) -> None:
     if not rows:
         print("(none)")
         return
-    cells = [[str(r.get(c, "")) for c in columns] for r in rows]
+    cells = [["" if r.get(c) is None else str(r[c]) for c in columns] for r in rows]
     widths = [max(len(c), *(len(row[i]) for row in cells)) for i, c in enumerate(columns)]
     print("  ".join(c.ljust(w) for c, w in zip(columns, widths)))
     for row in cells:
@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", help="path in the project, or project@vN / project@alias from the registry")
     for name in ("split", "sample"):
         p.add_argument(f"--{name}")
+
+    p = sub.add_parser("api", help="start the platform API and UI")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--reload", action="store_true")
 
     ds = sub.add_parser("dataset", help="dataset registry").add_subparsers(dest="action", required=True)
     p = ds.add_parser("add", help="register a folder as a new dataset version")
@@ -173,6 +178,11 @@ def main(argv=None) -> int:
             return dataset_command(args)
         if args.cmd == "model":
             return model_command(args)
+        if args.cmd == "api":
+            import uvicorn
+
+            uvicorn.run("mlops.api:app", host=args.host, port=args.port, reload=args.reload)
+            return 0
         project = load_project(args.project)
         if args.cmd == "validate":
             print(f"{project.name}: ok ({', '.join(project.entrypoints)})")

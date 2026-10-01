@@ -45,6 +45,14 @@ mlops model rollback toy-regression
 
 Dataset files are stored once by content hash in `store/`. By default they are hard-linked from the source folder, which makes the source files read-only; `--copy` keeps them editable at the cost of disk space.
 
+## API
+
+```bash
+mlops api
+```
+
+Serves the API on http://localhost:8000/api (docs at `/api/docs`) and the web UI on http://localhost:8000 once built. It runs on the host, not in Docker, to read dataset folders and hard-link them into the store.
+
 Each run is an MLflow run in the experiment named after the project: params (command, config values, profile), tags (image id, Git commit), metrics from the JSON outputs, artifacts (model, metrics, config, stdout, hardware).
 
 Platform settings are in `configs/platform.yaml`, hardware profiles in `configs/hardware_profiles.yaml`. Docker-limited profiles are tagged `estimated`.
