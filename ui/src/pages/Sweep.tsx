@@ -155,7 +155,9 @@ export function SweepPage() {
       <div className="page-head">
         <div>
           <div className="eyebrow">sweep {s.id}</div>
-          <h1 className="title">{s.entrypoint === "train" ? "Training sweep" : `Evaluation sweep of ${s.spec.model?.split("@")[1] ?? ""}`}</h1>
+          <h1 className="title">{s.entrypoint === "train" ? "Training sweep"
+            : s.params.join() === "condition" ? `Robustness of ${s.spec.model?.split("@")[1] ?? ""}`
+            : `Evaluation sweep of ${s.spec.model?.split("@")[1] ?? ""}`}</h1>
           <div className="subtitle status-line">
             <span>{s.points.length} runs</span>
             <span className="mono">{s.spec.config}</span>

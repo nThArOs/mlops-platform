@@ -407,6 +407,7 @@ def list_projects() -> list[dict]:
                 "constraints": contract.get("constraints") or {},
                 "retrain": [r for r in contract.get("retrain") or [] if r.get("model") == slot],
                 "preprocessing": {"files": files, "current": current},
+                "robustness": list(row["contract"].get("robustness") or {}),
                 "versions": len(c.search_model_versions(f"name='{key}'")) if model else 0,
                 "production": int(model.aliases["production"]) if model and "production" in model.aliases else None,
                 "updated_at": row["updated_at"],

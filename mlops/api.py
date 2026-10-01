@@ -321,6 +321,11 @@ def error_image(run_id: str, name: str):
     return FileResponse(path, headers={"Cache-Control": "max-age=86400"})
 
 
+@app.post("/api/robustness")
+def create_robustness(body: JobSpec):
+    return jobs.sweep(jobs.create_robustness(body.model_dump()))
+
+
 @app.get("/api/sweeps")
 def list_sweeps(model: str | None = None):
     return jobs.sweeps(model)

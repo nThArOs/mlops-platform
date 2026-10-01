@@ -232,6 +232,7 @@ export default function ModelPage() {
   const [promoting, setPromoting] = useState<number | null>(null);
   const [rollingBack, setRollingBack] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [cmVersion, setCmVersion] = useState<number | null>(null);
   const [training, setTraining] = useState(false);
   const [sweeping, setSweeping] = useState(false);
@@ -400,6 +401,15 @@ export default function ModelPage() {
         <div className="section" id="version-details">
           <div className="section-head">
             <h2 className="section-title">Version details</h2>
+            {meta && meta.robustness.length > 0 && (
+              <button className="btn small" title={`Evaluate again under: ${meta.robustness.join(", ")}`} onClick={async () => {
+                try {
+                  const s = await sweeps.robustness({ project: meta.project, slot: meta.slot, entrypoint: "evaluate",
+                    model: `${meta.name}@v${cmShown.version}`, datasets: Object.keys(cmShown.evaluations) });
+                  navigate(`/sweeps/${s.id}`);
+                } catch (e) { setMessage((e as Error).message); }
+              }}>Test robustness of v{cmShown.version}</button>
+            )}
             <span className="status-line">
               <span>version</span>
               <select className="select mono" value={cmShown.version} onChange={(e) => setCmVersion(Number(e.target.value))}>

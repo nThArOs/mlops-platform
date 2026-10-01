@@ -187,6 +187,22 @@ def create_sweep(spec: dict, grid: dict[str, list]) -> str:
     return sweep_id
 
 
+def create_robustness(spec: dict) -> str:
+    """Evaluate one version under each condition of the contract's `robustness`, plus the reference."""
+    import uuid
+
+    project = load_project(project_root(spec["project"]))
+    conditions = project.raw.get("robustness") or {}
+    if not conditions:
+        raise ContractError(f"{project.name} declares no robustness conditions")
+    spec = {**spec, "entrypoint": "evaluate", "config": spec.get("config") or project.entrypoints["evaluate"].config}
+    sweep_id = uuid.uuid4().hex[:8]
+    for name, overrides in {"reference": {}, **conditions}.items():
+        create({**spec, "params": merge(spec.get("params") or {}, _unflatten(overrides or {})),
+                "sweep": sweep_id, "sweep_point": {"condition": name}})
+    return sweep_id
+
+
 def _sweep_jobs(sweep_id: str | None = None, limit: int = 2000) -> list[dict]:
     with db.engine().connect() as conn:
         rows = conn.execute(sa.select(db.jobs).order_by(db.jobs.c.id.desc()).limit(limit)).mappings().all()

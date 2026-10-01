@@ -125,6 +125,7 @@ export type ModelSummary = {
   constraints: Record<string, Record<string, number>>;
   retrain: { datasets?: string[]; config?: string; promote?: string; benchmark_profiles?: string[] }[];
   preprocessing: { files: string[]; current: string | null };
+  robustness: string[];
   versions: number;
   production: number | null;
   updated_at: string;
@@ -324,6 +325,7 @@ export type SweepSummary = { id: string; model: string; entrypoint: string; para
 export const sweeps = {
   create: (body: JobRequest & { grid: Record<string, unknown[]> }) =>
     request<Sweep>("/api/sweeps", json(body)),
+  robustness: (body: JobRequest) => request<Sweep>("/api/robustness", json(body)),
   list: (model?: string) => request<SweepSummary[]>(`/api/sweeps${model ? `?model=${encodeURIComponent(model)}` : ""}`),
   get: (id: string) => request<Sweep>(`/api/sweeps/${id}`),
 };
