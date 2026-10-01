@@ -36,7 +36,7 @@ export default function DatasetPicker({ label, help, declared, picked, onChange,
           const chosen = on ? (picked[d.name] as number) : null;
           return (
             <label key={d.name} className={`dataset-row ${on ? "" : "off"}`}>
-              <input type="checkbox" checked={on} onChange={(e) => set(d.name, e.target.checked ? (h?.production ?? d.versions[0] ?? "") : "")} />
+              <input type="checkbox" checked={on} onChange={(e) => set(d.name, e.target.checked ? (d.versions[0] ?? "") : "")} />
               <span className="mono">{d.name}</span>
               <span className="faint mono dataset-mount">{d.mount}</span>
               <select className="select mono" value={on ? String(picked[d.name]) : ""} disabled={!on}

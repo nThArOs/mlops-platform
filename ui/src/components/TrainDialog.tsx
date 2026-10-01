@@ -82,12 +82,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
     if (!o || registry.loading) return;
     setConfig((c) => c ?? o.entrypoints.train?.config ?? o.configs[0] ?? null);
     setProfile((p) => p || o.default_profile);
-    const used = Object.values(history).some((h) => h.production != null || h.latest != null);
-    setPicked((p) => (Object.keys(p).length ? p : Object.fromEntries(o.datasets.map((d) => {
-      const h = history[d.name];
-      return [d.name, used ? (h?.production ?? h?.latest ?? "") : (d.versions[0] ?? "")];
-    }))));
-  }, [o, registry.loading, history]);
+  }, [o, registry.loading]);
   const others = (registered.data ?? [])
     .filter((d) => !o?.datasets.some((x) => x.name === d.name))
     .map((d) => ({ name: d.name, version: d.version, license: d.license }));
@@ -102,9 +97,9 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
     const prodRefs = Object.keys(prod?.evaluations ?? {});
     setEvalPicked(Object.fromEntries(o.datasets.map((d) => {
       const ref = prodRefs.find((r) => r.startsWith(`${d.name}@v`));
-      return [d.name, ref ? Number(ref.split("@v")[1]) : (picked[d.name] ?? d.versions[0] ?? "")];
+      return [d.name, ref ? Number(ref.split("@v")[1]) : ""];
     })));
-  }, [o, registry.loading, registry.data, picked, evalPicked]);
+  }, [o, registry.loading, registry.data, evalPicked]);
 
   const changed = Object.entries(values).filter(([k, v]) => v !== show(flat[k]));
   const evalRefs = refsOf(evalPicked);
@@ -113,6 +108,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
   async function submit() {
     if (!config) return setError("Choose a config to start from.");
     if (refs.length === 0) return setError("Check at least one dataset.");
+    if (evaluate && evalRefs.length === 0) return setError("Check at least one dataset to evaluate on, or turn evaluation off.");
     setBusy(true);
     setError(null);
     try {
@@ -120,7 +116,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
         project, slot, entrypoint: "train", config,
         params: unflatten(Object.fromEntries(changed.map(([k, v]) => [k, coerce(v, flat[k])]))),
         datasets: refs, profile, variant: variant.trim() || undefined,
-        auto_evaluate: evaluate, eval_datasets: evalRefs.length ? evalRefs : refs, benchmark_profiles: bench,
+        auto_evaluate: evaluate, eval_datasets: evaluate ? evalRefs : [], benchmark_profiles: bench,
       });
       navigate(`/runs/${job.id}`);
     } catch (e) {
@@ -172,10 +168,10 @@ export default function TrainDialog({ project, slot, benchProfiles = [], constra
           </div>
 
           <DatasetPicker label="Datasets" project={project} declared={o.datasets} picked={picked} onChange={setPicked}
-            history={history} others={others} help={
+            history={registry.loading ? undefined : history} others={others} help={
               <Help title="Datasets">
                 <span>Checked datasets are mounted read-only where the project expects them. The run is linked to these exact versions, so the new model always knows what it was trained on.</span>
-                <span>Defaults to the versions production was trained on. The right column shows them, and those of the latest trained version.</span>
+                <span>Nothing is checked by default: choose the data of this run. The right column shows the versions production and the latest trained version used.</span>
                 <span>Mounting only makes the data available: the project code decides which folders it reads.</span>
               </Help>} />
 
