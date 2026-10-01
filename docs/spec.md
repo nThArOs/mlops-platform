@@ -10,16 +10,16 @@
 | 6 | Model registry | Model versions | candidate -> production -> archived, variants, import of existing models, configurable promotion rule, rollback, history | MLflow Registry, PostgreSQL | done |
 | 7 | Example project | Validate the contract | `compressed-detection`: residual and RGB models, live detection service | - | done, `benchmark.py` missing |
 | 8 | Evaluation views | Understand a version | Watched metrics with intervals, confusion matrix with computed scores, operational metrics, threshold curve, slices | in-house | done |
-| 9 | Live: training | Live curves | Loss / mAP per epoch, ETA, CPU/RAM | MLflow, `mlops_sdk` | log only |
-| 10 | Live: operations | Service health | Latency, fps, errors, per-stage time, CPU/RAM; start, stop and replace the production service; live view | Prometheus (Apache-2.0), `/metrics` | done, CPU/RAM missing |
-| 11 | Live: production quality | Drift without labels | Confidence distribution, predictions per input, input drift | PostgreSQL, in-house | trends only, no drift score |
+| 9 | Live: training | Live curves | Loss / mAP per epoch from whatever the project logs to its run, live log | MLflow | done |
+| 10 | Live: operations | Service health | Latency, fps, errors, per-stage time, CPU/RAM; start, stop and replace the production service; live view | Prometheus (Apache-2.0), `/metrics` | done |
+| 11 | Live: production quality | Drift without labels | Confidence distribution, predictions per input, input drift | PostgreSQL, in-house | done: PSI between the first and the last window on input and prediction histograms |
 | 12 | Live: true performance | Quality with labels | Precision, recall, HOTA on fresh labeled data; operator feedback endpoint | PostgreSQL, in-house | to do |
-| 13 | Edge: benchmark | Embedded metrics | Latency p50/p95/p99, cold start, per-stage latency, peak RAM, size, params, FLOPs, energy | generic ONNX script, project `benchmark` | to do |
+| 13 | Edge: benchmark | Embedded metrics | Latency p50/p95/p99, cold start, per-stage latency, peak RAM, size, params, FLOPs, energy | project `benchmark` entrypoint | done for project benchmarks, no generic script, no energy |
 | 14 | Edge: hardware profiles | Where to measure | `local`, Docker-limited (estimated); device agent later | Docker | profiles done, agent to do |
-| 15 | Edge: exports | Compare variants | ONNX, ONNX INT8, OpenVINO, exported by the project | ONNX Runtime (MIT), OpenVINO (Apache-2.0) | to do |
+| 15 | Edge: exports | Compare variants | ONNX, ONNX INT8, OpenVINO, exported by the project | ONNX Runtime (MIT), OpenVINO (Apache-2.0) | ONNX and INT8 done in the example project, OpenVINO to do |
 | 16 | Web UI | Overview | Datasets, models, runs, production pages; accuracy / latency per profile and constraint badges later | FastAPI (MIT), React (MIT), no Grafana | done for steps 1-4 |
 | 17 | Retraining | Automation | Triggers: new dataset version, drift, metric drop, schedule -> run -> compare -> promote | in-house worker | manual trigger only |
-| 18 | Alerts | Notify | Thresholds on drift, latency, metrics | Prometheus Alertmanager (Apache-2.0) | to do |
+| 18 | Alerts | Notify | Thresholds on drift, latency, metrics | in-house | in-app alerts done, notifications (mail, chat) to do |
 
 ## Licensing
 

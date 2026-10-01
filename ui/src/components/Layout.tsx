@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { production } from "../api";
 import { Activity, Box, Database, ListChecks, Moon, Sun } from "lucide-react";
 
 type Theme = "light" | "dark";
@@ -23,6 +24,14 @@ const nav: { to: string; label: string; icon: typeof Box; soon?: boolean }[] = [
 
 export default function Layout() {
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [alertCount, setAlertCount] = useState(0);
+
+  useEffect(() => {
+    const load = () => production.alerts().then((a) => setAlertCount(a.length)).catch(() => setAlertCount(0));
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -43,6 +52,7 @@ export default function Layout() {
             <Icon size={16} strokeWidth={1.6} aria-hidden="true" />
             {label}
             {soon && <span className="soon">soon</span>}
+            {to === "/production" && alertCount > 0 && <span className="nav-count" aria-label={`${alertCount} alerts`}>{alertCount}</span>}
           </NavLink>
         ))}
         <div className="sidebar-foot">

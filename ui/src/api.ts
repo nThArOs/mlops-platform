@@ -180,7 +180,10 @@ export type Deployment = {
   healthy?: boolean;
   servable?: boolean;
   production: number | null;
+  resources?: { cpu_pct: number; mem_mb: number; mem_limit_mb: number } | null;
 };
+
+export type Alert = { project: string; level: "warning" | "critical"; title: string; detail: string };
 
 type Points = [number, number][];
 type LiveKey = "latency_p50_ms" | "latency_p95_ms" | "requests_per_s" | "error_rate" | "confidence_mean" | "predictions_per_input";
@@ -201,6 +204,7 @@ export const models = {
 
 export const production = {
   list: () => request<Deployment[]>("/api/production"),
+  alerts: () => request<Alert[]>("/api/alerts"),
   get: (project: string) => request<Deployment>(`/api/production/${project}`),
   start: (project: string, version?: number) =>
     request<Deployment>(`/api/production/${project}/start`, json({ version })),

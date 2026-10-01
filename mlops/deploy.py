@@ -82,6 +82,24 @@ def frame(port: int, view: str, width: int) -> bytes | None:
         return None
 
 
+UNITS = {"B": 1 / 2**20, "KiB": 1 / 1024, "MiB": 1, "GiB": 1024, "TiB": 2**20, "kB": 1e3 / 2**20, "MB": 1e6 / 2**20, "GB": 1e9 / 2**20}
+
+
+def _mib(text: str) -> float:
+    m = re.match(r"([\d.]+)\s*([A-Za-z]+)", text.strip())
+    return float(m.group(1)) * UNITS.get(m.group(2), 1) if m else 0.0
+
+
+def resources(project: str) -> dict | None:
+    r = docker("stats", "--no-stream", "--format", "{{json .}}", container_name(project), check=False)
+    if r.returncode or not r.stdout.strip():
+        return None
+    s = json.loads(r.stdout.strip().splitlines()[0])
+    used, limit = (part.strip() for part in s["MemUsage"].split("/"))
+    return {"cpu_pct": float(s["CPUPerc"].rstrip("%") or 0), "mem_mb": round(_mib(used), 1),
+            "mem_limit_mb": round(_mib(limit), 1), "pids": int(s.get("PIDs") or 0)}
+
+
 def logs(project: str, tail: int = 200) -> str:
     r = docker("logs", "--tail", str(tail), container_name(project), check=False)
     return (r.stdout + r.stderr) if r.returncode == 0 else ""
@@ -291,3 +309,52 @@ def drift(project: str, window_minutes: int = 30) -> dict:
         })
     return {"ready": True, "window_minutes": round(window / 60, 1), "reference_start": started,
             "features": features, "no_data": idle}
+
+
+def _last(points: list) -> float | None:
+    return points[-1][1] if points else None
+
+
+def alerts() -> list[dict]:
+    out = []
+
+    def add(project, level, title, detail):
+        out.append({"project": project, "level": level, "title": title, "detail": detail})
+
+    for d in deployments():
+        key = d["project"]
+        if not d.get("running"):
+            continue
+        if not d.get("healthy"):
+            add(key, "critical", "Service not answering", "The container runs but /metrics does not respond.")
+            continue
+        if d.get("production") and d.get("version") != d["production"]:
+            add(key, "warning", "Not the production version",
+                f"The service runs v{d['version']} while v{d['production']} is in production.")
+        try:
+            live = live_metrics(key, 5, 15)
+        except ContractError:
+            continue
+        errors = _last(live.get("error_rate", []))
+        if errors is not None and errors > 0.01:
+            add(key, "critical" if errors > 0.05 else "warning", "Errors",
+                f"{errors:.1%} of requests failed over the last minute.")
+        project, slot = split_key(key)
+        contract = models._contract(key)
+        limits = (contract.get("constraints") or {}).get(d.get("profile") or "", {})
+        p95 = _last(live.get("latency_p95_ms", []))
+        if p95 is not None and limits.get("latency_p95_ms") and p95 > limits["latency_p95_ms"]:
+            add(key, "warning", "Latency over the target",
+                f"p95 {p95:.0f} ms, the {d['profile']} target is {limits['latency_p95_ms']} ms.")
+        res = resources(key)
+        if res and limits.get("ram_mb") and res["mem_mb"] > limits["ram_mb"]:
+            add(key, "warning", "Memory over the target",
+                f"{res['mem_mb']:.0f} MB used, the {d['profile']} target is {limits['ram_mb']} MB.")
+        try:
+            dr = drift(key)
+        except ContractError:
+            dr = {"features": []}
+        shifted = [f["name"] for f in dr.get("features", []) if f["level"] == "significant"]
+        if shifted:
+            add(key, "warning", "Input or prediction drift", "Significant shift on " + ", ".join(shifted) + ".")
+    return out

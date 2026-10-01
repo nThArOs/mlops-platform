@@ -91,6 +91,8 @@ const G: Record<string, Entry> = {
   input_residual_energy: { title: "Residual energy", what: "Mean absolute residual per frame: what motion compensation could not predict. Rises with noise, lighting changes or new textures." },
   input_brightness: { title: "Brightness", what: "Mean luma of the frames. Tracks time of day, weather and exposure changes." },
   prediction_confidence: { title: "Prediction confidence", what: "Scores the model gives to its detections. A shift often comes before a drop in accuracy." },
+  cpu: { title: "CPU", what: "Processor time used by the service container, in cores. 1.00 means one core fully busy." },
+  memory: { title: "Memory", what: "Memory used by the service container, with the limit of its hardware profile when there is one." },
   confusion: {
     title: "Confusion matrix",
     what: "Rows are what was really there, columns what the model predicted. The diagonal is correct; the background row holds false alarms and the background column holds misses.",

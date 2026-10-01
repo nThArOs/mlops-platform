@@ -323,3 +323,12 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .drift-pair { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
 .drift-pair span { width: 40%; max-width: 12px; border-radius: 3px 3px 0 0; min-height: 1px; }
 .drift-label { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+.alerts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+.alert { display: grid; grid-template-columns: 90px minmax(0, 220px) minmax(0, 220px) minmax(0, 1fr); gap: 12px; align-items: center;
+  padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--border); font-size: 13px; }
+.alert:hover { background: var(--hover); }
+.alert.critical { border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.nav-count { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--danger);
+  color: #fff; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 860px) { .alert { grid-template-columns: 1fr; gap: 4px; } }

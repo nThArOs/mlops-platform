@@ -191,9 +191,16 @@ def list_deployments():
     return deploy.deployments()
 
 
+@app.get("/api/alerts")
+def list_alerts():
+    return deploy.alerts()
+
+
 @app.get("/api/production/{project}")
 def deployment(project: str):
-    return {**deploy.status(project), "production": models.production_version(project)}
+    st = deploy.status(project)
+    return {**st, "production": models.production_version(project),
+            "resources": deploy.resources(project) if st.get("running") else None}
 
 
 @app.post("/api/production/{project}/start")

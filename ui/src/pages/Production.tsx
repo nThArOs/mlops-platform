@@ -28,6 +28,23 @@ function serviceBadge(d: Deployment) {
   return <Badge tone="success" dot>serving</Badge>;
 }
 
+function Alerts() {
+  const alerts = useFetch(production.alerts, []);
+  if (!alerts.data?.length) return null;
+  return (
+    <div className="alerts">
+      {alerts.data.map((a, i) => (
+        <Link key={i} to={`/production/${a.project}`} className={`alert ${a.level}`}>
+          <Badge tone={a.level === "critical" ? "danger" : "warning"}>{a.level}</Badge>
+          <span className="mono">{a.project}</span>
+          <span>{a.title}</span>
+          <span className="muted">{a.detail}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export function ProductionList() {
   const navigate = useNavigate();
   const { data, error, loading } = useFetch(production.list, []);
@@ -40,6 +57,7 @@ export function ProductionList() {
           <div className="subtitle">Services running the production version of each model, with live metrics.</div>
         </div>
       </div>
+      <Alerts />
       {loading && !data && <Loading />}
       {error && <Note kind="error">Couldn't load services. {error}</Note>}
       {data && data.length > 0 && (
@@ -263,6 +281,13 @@ export function ProductionService() {
         <Stat label={<>Latency p95<InfoTip metric="latency" /></>} value={last(m.latency_p95_ms) !== undefined ? ms(last(m.latency_p95_ms)!) : "–"} />
         <Stat label={<>Throughput<InfoTip metric="throughput" /></>} value={last(m.requests_per_s) !== undefined ? rps(last(m.requests_per_s)!) : "–"} />
         <Stat label={<>Error rate<InfoTip metric="error_rate" /></>} value={last(m.error_rate) !== undefined ? pct(last(m.error_rate)!) : "–"} />
+        {d?.resources && (
+          <Stat label={<>CPU<InfoTip metric="cpu" /></>} value={`${(d.resources.cpu_pct / 100).toFixed(2)} cores`} />
+        )}
+        {d?.resources && (
+          <Stat label={<>Memory<InfoTip metric="memory" align="right" /></>}
+            value={<>{d.resources.mem_mb.toFixed(0)} MB{d.resources.mem_limit_mb < 15000 && <span className="faint" style={{ fontSize: 12.5 }}> / {d.resources.mem_limit_mb.toFixed(0)}</span>}</>} />
+        )}
         <Stat label={m.confidence_mean?.length
           ? <>Mean confidence<InfoTip metric="confidence" align="right" /></>
           : <>Predictions per input<InfoTip metric="predictions_per_input" align="right" /></>}
