@@ -388,3 +388,8 @@ td.num.danger { background: var(--danger-bg); color: var(--danger); }
 td.num.warning { background: var(--warning-bg); color: var(--warning); }
 .scatter-tip { display: flex; flex-direction: column; gap: 4px; white-space: normal; width: 220px; }
 .tip-grid { display: grid; grid-template-columns: auto 1fr; gap: 1px 12px; }
+
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.gallery figure { margin: 0; background: var(--surface-2); border-radius: var(--radius); overflow: hidden; }
+.gallery img { display: block; width: 100%; height: auto; }
+.gallery figcaption { font-size: 11.5px; color: var(--text-2); padding: 5px 8px; }

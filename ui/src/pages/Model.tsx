@@ -9,6 +9,7 @@ import InfoTip from "../components/InfoTip";
 import ProgressBar from "../components/Progress";
 import TrainDialog from "../components/TrainDialog";
 import { SweepDialog } from "./Sweep";
+import ErrorExplorer from "../components/Errors";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
 import { date } from "../lib/format";
 import { lookup } from "../lib/glossary";
@@ -409,6 +410,8 @@ export default function ModelPage() {
           </div>
           {meta && <VersionDetails version={cmShown} dataset={dataset} meta={meta}
             production={versions.find((v) => v.version === detail.data!.production)} />}
+          <h3 className="section-title" style={{ fontSize: 15, margin: "28px 0 10px" }}>Errors</h3>
+          <ErrorExplorer model={project} version={cmShown} dataset={dataset} versions={versions} />
         </div>
       )}
 

@@ -77,6 +77,39 @@ def preprocessing_snapshot(project: str, version: int, dst: Path) -> Path | None
                                                     tracking_uri=load_config()["tracking_uri"]))
 
 
+def errors_dir(run_id: str) -> Path:
+    from .config import resolve
+
+    return resolve(load_config()["runs_dir"]) / "cache" / "errors" / run_id
+
+
+def errors(project: str, version: int, dataset_ref: str) -> dict:
+    """Missed objects and false alarms of the latest evaluation of this version on this dataset version."""
+    import json
+
+    from . import datasets
+
+    e = db.model_evaluations
+    with db.engine().connect() as conn:
+        run_id = conn.execute(sa.select(e.c.run_id).where(
+            e.c.project == project, e.c.model_version == version,
+            e.c.dataset_version_id == datasets.get_version(dataset_ref)["id"]).order_by(e.c.id.desc())).scalar()
+    if run_id is None:
+        raise ContractError(f"{project}@v{version} has no evaluation on {dataset_ref}")
+    folder = errors_dir(run_id)
+    if not (folder / "errors.json").is_file():
+        if not any(a.path == "errors" for a in client().list_artifacts(run_id)):
+            return {"run_id": run_id, "examples": None}
+        folder.mkdir(parents=True, exist_ok=True)
+        mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="errors", dst_path=str(folder.parent / f"{run_id}.tmp"),
+                                            tracking_uri=load_config()["tracking_uri"])
+        tmp = folder.parent / f"{run_id}.tmp" / "errors"
+        for f in tmp.iterdir():
+            f.replace(folder / f.name)
+    data = json.loads((folder / "errors.json").read_text(encoding="utf-8"))
+    return {"run_id": run_id, **data}
+
+
 def record_evaluation(project: str, version: int, run_id: str, dataset_version_ids: list[int],
                       metrics: dict[str, float], confusion: dict | None = None, extras: dict | None = None) -> None:
     with db.engine().begin() as conn:

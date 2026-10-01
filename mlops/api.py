@@ -1,4 +1,5 @@
 import mimetypes
+import re
 import shutil
 import tempfile
 import zipfile
@@ -305,6 +306,19 @@ def create_sweep(body: SweepSpec):
     spec = body.model_dump()
     grid = spec.pop("grid")
     return jobs.sweep(jobs.create_sweep(spec, grid))
+
+
+@app.get("/api/models/{project}/versions/{version}/errors")
+def version_errors(project: str, version: int, dataset: str):
+    return models.errors(project, version, dataset)
+
+
+@app.get("/api/errors/{run_id}/{name}")
+def error_image(run_id: str, name: str):
+    path = models.errors_dir(run_id) / name
+    if not re.fullmatch(r"[0-9a-f]{32}", run_id) or "/" in name or "\\" in name or not path.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(path, headers={"Cache-Control": "max-age=86400"})
 
 
 @app.get("/api/sweeps")
