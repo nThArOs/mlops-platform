@@ -126,31 +126,48 @@ function EvaluatedQuality({ project, version }: { project: string; version: numb
   );
 }
 
+const LIVE = -1;
 const RATES = [
+  { label: "Live", fps: LIVE },
   { label: "Pause", fps: 0 },
   { label: "0.5 fps", fps: 0.5 },
   { label: "1 fps", fps: 1 },
   { label: "2 fps", fps: 2 },
 ];
 
-function LiveView({ project }: { project: string }) {
+function LiveView({ project, serviceFps }: { project: string; serviceFps?: number }) {
   const [view, setView] = useState<"input" | "source">("input");
-  const [fps, setFps] = useState(1);
+  const [fps, setFps] = useState(LIVE);
+  const [hidden, setHidden] = useState(document.hidden);
+  const started = useRef(Date.now());
+  // Live follows the rate the service processes frames at; a frame is encoded once and cached, so
+  // asking at that rate costs about one JPEG per processed frame.
+  const rate = hidden ? 0 : fps === LIVE ? Math.min(Math.max(serviceFps ?? 1, 0.5), 10) : fps;
   const [tick, setTick] = useState(() => Date.now());
   const [state, setState] = useState<"loading" | "ok" | "none" | "error">("loading");
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => {
+    const onVisibility = () => setHidden(document.hidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  const load = () => {
+    started.current = Date.now();
+    setTick(started.current);
+  };
 
   const next = () => {
     window.clearTimeout(timer.current);
-    if (fps > 0) timer.current = window.setTimeout(() => setTick(Date.now()), 1000 / fps);
+    if (rate > 0) timer.current = window.setTimeout(load, Math.max(0, 1000 / rate - (Date.now() - started.current)));
   };
 
   useEffect(() => {
-    if (fps > 0) setTick(Date.now());
+    if (rate > 0) load();
     else window.clearTimeout(timer.current);
-  }, [fps]);
+  }, [fps, hidden]);
 
   async function onError() {
     const r = await fetch(production.frameUrl(project, view, Date.now()));
@@ -169,16 +186,18 @@ function LiveView({ project }: { project: string }) {
         </div>
         <div className="segmented">
           {RATES.map((r) => (
-            <button key={r.label} className={fps === r.fps ? "on" : ""} onClick={() => setFps(r.fps)}>{r.label}</button>
+            <button key={r.label} className={fps === r.fps ? "on" : ""} onClick={() => setFps(r.fps)}
+              title={r.fps === LIVE ? "Follow the rate the service processes frames at" : undefined}>{r.label}</button>
           ))}
         </div>
       </div>
       <div className="live">
-        <img src={production.frameUrl(project, view, tick)} alt={`${view === "input" ? "Model input" : "Source frame"} with detections`}
+        <img src={production.frameUrl(project, view, tick, fps === LIVE ? 640 : 960)} alt={`${view === "input" ? "Model input" : "Source frame"} with detections`}
           onLoad={() => { setState("ok"); next(); }} onError={onError} />
       </div>
       <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>
-        {state === "error" ? "No frame yet, retrying." : "Frames are encoded only while this view is open; the cost shows as the preview stage above."}
+        {state === "error" ? "No frame yet, retrying."
+          : `${hidden ? "Paused while the page is hidden. " : fps === LIVE ? `Live, ${rate.toFixed(1)} frames per second like the service. ` : ""}Each processed frame is encoded once, only while this view is open and visible; the cost shows as the preview stage above.`}
       </p>
     </div>
   );
@@ -354,7 +373,7 @@ export function ProductionService() {
       {d?.running && (
         <div className="section">
           <div className="section-head"><h2 className="section-title">Live view</h2></div>
-          <LiveView project={project} />
+          <LiveView project={project} serviceFps={fps} />
         </div>
       )}
 

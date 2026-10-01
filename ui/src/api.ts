@@ -214,8 +214,8 @@ export const production = {
     request<LiveMetrics>(`/api/production/${project}/metrics?minutes=${minutes}`),
   logs: (project: string) => request<{ logs: string }>(`/api/production/${project}/logs`),
   drift: (project: string) => request<{ ready: boolean; detail?: string; window_minutes: number; features: unknown[]; no_data: string[] }>(`/api/production/${project}/drift`),
-  frameUrl: (project: string, view: "input" | "source", t: number) =>
-    `/api/production/${project}/frame?view=${view}&width=960&t=${t}`,
+  frameUrl: (project: string, view: "input" | "source", t: number, width = 960) =>
+    `/api/production/${project}/frame?view=${view}&width=${width}&t=${t}`,
 };
 
 export type JobProgress = {
