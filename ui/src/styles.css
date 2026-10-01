@@ -275,3 +275,11 @@ dialog.modal::backdrop { background: var(--overlay); }
 .tip-formula { color: var(--text); background: var(--surface-2); padding: 6px 8px; border-radius: 6px; font-size: 11.5px; }
 .tip-label { font-family: var(--font-mono); font-size: 12px; fill: var(--text); }
 .tip-sub { font-family: var(--font-sans); font-size: 10px; fill: var(--text-3); }
+
+.cm td.tip { display: table-cell; margin: 0; position: relative; cursor: help; vertical-align: middle; }
+.cm td.tip:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.cm .cm-tag {
+  display: block; width: fit-content; margin: 0 auto 2px; padding: 0 7px; border-radius: 999px;
+  font-size: 10.5px; font-family: var(--font-mono); background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.cm td { min-width: 112px; height: 60px; }

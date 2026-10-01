@@ -8,6 +8,18 @@ export type Confusion = {
   columns?: string;
 };
 
+function cellName(labels: string[], i: number, j: number): { tag: string; title: string; what: string } {
+  const bg = labels.length - 1;
+  const hasBg = labels[bg] === "background";
+  const truth = labels[i];
+  const pred = labels[j];
+  if (hasBg && i === bg && j === bg) return { tag: "TN", title: "True negatives", what: "Background predicted as background. Not counted for detection: there is no finite number of empty boxes." };
+  if (hasBg && i === bg) return { tag: "FP", title: "False positives", what: `False alarms: the model predicted ${pred} where nothing was annotated.` };
+  if (hasBg && j === bg) return { tag: "FN", title: "False negatives", what: `Misses: a real ${truth} that the model didn't detect.` };
+  if (i === j) return { tag: "TP", title: "True positives", what: `Correct detections: a real ${truth} predicted as ${pred}.` };
+  return { tag: "Confusion", title: `${truth} seen as ${pred}`, what: `A real ${truth} that the model labeled ${pred}.` };
+}
+
 export default function ConfusionMatrix({ data }: { data: Confusion }) {
   const [normalize, setNormalize] = useState(false);
   const rowSums = data.matrix.map((row) => row.reduce<number>((a, v) => a + (v ?? 0), 0));
@@ -40,15 +52,33 @@ export default function ConfusionMatrix({ data }: { data: Confusion }) {
               <th className="mono">{data.labels[i]}</th>
               {row.map((raw, j) => {
                 const v = value(raw, i);
-                if (v === null) return <td key={j} className="cm-none" title="not measured">–</td>;
+                const name = cellName(data.labels, i, j);
+                const tip = (
+                  <span role="tooltip" className={`tip-panel ${j === row.length - 1 ? "right" : "left"}`}>
+                    <span className="tip-title">{name.title}</span>
+                    <span>{name.what}</span>
+                    <span className="faint mono">{data.labels[i]} → {data.labels[j]}{v !== null ? `: ${show(v)}` : ""}</span>
+                  </span>
+                );
+                if (v === null) {
+                  return (
+                    <td key={j} className="cm-none tip" tabIndex={0}>
+                      <span className="cm-tag">{name.tag}</span>
+                      <span className="mono">not measured</span>
+                      {tip}
+                    </td>
+                  );
+                }
                 const t = v / max;
                 return (
-                  <td key={j} title={`${data.labels[i]} → ${data.labels[j]}: ${show(v)}`}
+                  <td key={j} className="tip" tabIndex={0}
                     style={{
                       background: `color-mix(in srgb, var(--series-1) ${Math.round(8 + t * 82)}%, var(--surface))`,
                       color: t > 0.5 ? "#ffffff" : "var(--text)",
                     }}>
+                    <span className="cm-tag">{name.tag}</span>
                     <span className="mono">{show(v)}</span>
+                    {tip}
                   </td>
                 );
               })}

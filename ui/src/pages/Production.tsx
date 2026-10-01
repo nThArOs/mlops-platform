@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Play, Square } from "lucide-react";
-import { production, type Deployment, type LiveMetrics } from "../api";
+import { models, production, type Deployment, type LiveMetrics } from "../api";
 import InfoTip from "../components/InfoTip";
 import LineChart from "../components/LineChart";
 import { Badge, Loading, Note, Stat } from "../components/ui";
@@ -59,6 +59,41 @@ export function ProductionList() {
         </table>
       )}
     </>
+  );
+}
+
+function EvaluatedQuality({ project, version }: { project: string; version: number }) {
+  const detail = useFetch(() => models.get(project), [project]);
+  const list = useFetch(models.list, []);
+  const meta = list.data?.find((m) => m.name === project);
+  const evals = detail.data?.versions.find((v) => v.version === version)?.evaluations ?? {};
+  const refs = Object.keys(evals);
+  const [ref, setRef] = useState<string | null>(null);
+  const current = ref && evals[ref] ? ref : refs[0];
+
+  if (!meta || !detail.data) return null;
+  if (!current) {
+    return <p className="muted">v{version} has never been evaluated. Run its evaluate entrypoint to see its accuracy here.</p>;
+  }
+  const keys = [meta.primary, ...meta.watch.filter((k) => k !== meta.primary)].filter((k) => evals[current][k] !== undefined).slice(0, 6);
+  return (
+    <div>
+      <div className="status-line" style={{ marginBottom: 10 }}>
+        <span>Last evaluation of v{version} on</span>
+        {refs.length > 1 ? (
+          <select className="select mono" value={current} onChange={(e) => setRef(e.target.value)}>
+            {refs.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        ) : <span className="mono">{current}</span>}
+        <Link to={`/models/${project}`} style={{ textDecoration: "underline", textDecorationColor: "var(--border-strong)" }}>all versions</Link>
+      </div>
+      <div className="stats">
+        {keys.map((k) => (
+          <Stat key={k} label={<>{k.replace(/^mean\./, "")}<InfoTip metric={k} custom={meta.descriptions} /></>}
+            value={evals[current][k].toFixed(Math.abs(evals[current][k]) >= 100 ? 0 : 2)} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -233,6 +268,18 @@ export function ProductionService() {
           value={m.confidence_mean?.length ? last(m.confidence_mean)!.toFixed(2)
             : last(m.predictions_per_input) !== undefined ? num(last(m.predictions_per_input)!) : "–"} />
       </div>
+
+      {d?.version && (
+        <div className="section">
+          <div className="section-head">
+            <h2 className="section-title">Evaluated quality</h2>
+          </div>
+          <EvaluatedQuality project={project} version={d.version} />
+          <p className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>
+            Measured offline on annotated data. The live stream has no annotations, so only latency, throughput, errors and confidence are measured live.
+          </p>
+        </div>
+      )}
 
       <div className="section">
         <div className="section-head">
