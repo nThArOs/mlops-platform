@@ -17,6 +17,7 @@ projects = sa.Table(
     sa.Column("root", sa.Text, nullable=False),
     sa.Column("contract", sa.JSON, nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+    sa.Column("archived", sa.Boolean, server_default=sa.false(), nullable=False),
 )
 
 datasets = sa.Table(
@@ -111,6 +112,7 @@ jobs = sa.Table(
 MIGRATIONS = [
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS confusion JSON",
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS extras JSON",
+    "ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 model_events = sa.Table(

@@ -202,7 +202,8 @@ def follow_production(project: str) -> dict | None:
 
 def deployments() -> list[dict]:
     with db.engine().connect() as conn:
-        names = conn.execute(sa.select(db.projects.c.name).order_by(db.projects.c.name)).scalars().all()
+        names = conn.execute(sa.select(db.projects.c.name).where(db.projects.c.archived.is_(False))
+                             .order_by(db.projects.c.name)).scalars().all()
     out = []
     for name in names:
         spec = load_project(project_root(name))

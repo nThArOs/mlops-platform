@@ -329,7 +329,8 @@ def model_keys(contract: dict) -> list[tuple[str, str | None]]:
 def list_projects() -> list[dict]:
     c = client()
     with db.engine().connect() as conn:
-        rows = [dict(r) for r in conn.execute(sa.select(db.projects).order_by(db.projects.c.name)).mappings()]
+        rows = [dict(r) for r in conn.execute(sa.select(db.projects).where(db.projects.c.archived.is_(False))
+                                                 .order_by(db.projects.c.name)).mappings()]
     registered = {m.name: m for m in c.search_registered_models()}
     out = []
     for row in rows:

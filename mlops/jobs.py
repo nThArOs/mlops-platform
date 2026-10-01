@@ -234,7 +234,8 @@ def check_triggers() -> list[int]:
     """Queue a training for each retrain rule whose dataset got a version no run of the model was trained on."""
     created = []
     with db.engine().connect() as conn:
-        contracts = conn.execute(sa.select(db.projects.c.name, db.projects.c.contract)).all()
+        contracts = conn.execute(sa.select(db.projects.c.name, db.projects.c.contract)
+                                 .where(db.projects.c.archived.is_(False))).all()
     for project, contract in contracts:
         for rule in contract.get("retrain") or []:
             slot = rule.get("model")

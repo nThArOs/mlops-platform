@@ -115,6 +115,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reason")
     p = md.add_parser("history")
     p.add_argument("project")
+
+    pj = sub.add_parser("project", help="registered projects").add_subparsers(dest="action", required=True)
+    p = pj.add_parser("archive", help="stop its services and hide it, nothing is deleted")
+    p.add_argument("name")
+    p = pj.add_parser("restore", help="show an archived project again")
+    p.add_argument("name")
     return parser
 
 
@@ -214,6 +220,28 @@ def model_command(args) -> int:
     return 0
 
 
+def project_command(args) -> int:
+    import sqlalchemy as sa
+
+    from . import db, deploy
+
+    with db.engine().connect() as conn:
+        root = conn.execute(sa.select(db.projects.c.root).where(db.projects.c.name == args.name)).scalar()
+    if root is None:
+        raise ContractError(f"unknown project {args.name}")
+    archive = args.action == "archive"
+    if archive:
+        spec = load_project(root)
+        for slot in spec.models or [None]:
+            if deploy.status(spec.model_key(slot)).get("running"):
+                deploy.stop(spec.model_key(slot))
+                print(f"{spec.model_key(slot)} stopped")
+    with db.engine().begin() as conn:
+        conn.execute(sa.update(db.projects).where(db.projects.c.name == args.name).values(archived=archive))
+    print(f"{args.name} {'archived' if archive else 'restored'}")
+    return 0
+
+
 def serve_command(args) -> int:
     from . import deploy
 
@@ -251,6 +279,8 @@ def main(argv=None) -> int:
             return model_command(args)
         if args.cmd == "serve":
             return serve_command(args)
+        if args.cmd == "project":
+            return project_command(args)
         if args.cmd == "worker":
             from .jobs import work
 

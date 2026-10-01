@@ -70,6 +70,8 @@ mlops serve start toy-regression
 
 `examples/toy-regression` is a minimal project in plain Python; `load.py` sends test traffic to its service. Anything a project writes to the run given in `MLFLOW_RUN_ID` (per-epoch metrics for example) shows up as live curves.
 
+`mlops project archive toy-regression` stops its services and hides it from the platform without deleting anything; `mlops project restore` brings it back. Datasets versions are archived the same way from the UI.
+
 ## CLI
 
 | Command | Purpose |
