@@ -180,6 +180,11 @@ def list_versions(project: str) -> list[dict]:
             "extras": {ref_of(dv): x for dv, x in evaluation_extras(project, version).items()},
             "benchmarks": benchmarks(project, version),
         })
+    by_version = {v["version"]: v for v in out}
+    for v in out:
+        source = by_version.get(int(v["parent"].lstrip("v"))) if v["parent"] else None
+        if source and not v["trained_on"]:
+            v["trained_on"] = source["trained_on"]
     return out
 
 

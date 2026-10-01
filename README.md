@@ -87,6 +87,8 @@ Each run is an MLflow run in the experiment named after the project: params (com
 .venv/Scripts/python -m pytest
 ```
 
+On Windows, stop `mlops api` and `mlops worker` before reinstalling: pip cannot replace `mlops.exe` while it runs.
+
 ## UI development
 
 ```bash
