@@ -47,6 +47,8 @@ constraints:
 | --- | --- | --- |
 | `name` | yes | Unique project name |
 | `image` | yes | Docker image that contains the code and its dependencies |
+| `workdir` | no | Directory where the project root is mounted in the container, default `/app` |
+| `shm_size` | no | Shared memory for the container, for example `2g` |
 | `task` | no | Free label, display only |
 | `datasets` | no | Datasets used by the project; `format` is a free label |
 | `entrypoints.train` | yes | Produces a model and a metrics JSON |
@@ -63,9 +65,21 @@ constraints:
 
 The platform replaces these in `command`: `{config}`, `{model}`, `{dataset}`, `{split}`, `{sample}`, `{run_dir}`.
 
+## Execution
+
+The command runs with `sh -c` in the project image, with the project root mounted at `workdir`, which is also the current directory. CPU and memory limits come from the hardware profile. The container receives:
+
+| Variable | Value |
+| --- | --- |
+| `MLFLOW_TRACKING_URI` | Tracking server reachable from the container |
+| `MLFLOW_RUN_ID` | Run created by the platform, for live logging |
+| `MLOPS_RUN_DIR` | Per-run scratch directory, `/mlops/run`, logged as artifacts |
+| `MLOPS_PROFILE` | Hardware profile name |
+
 ## Outputs
 
-- `outputs` values are glob patterns relative to the project root inside the container.
+- `outputs` values are glob patterns relative to the project root. Only files written during the run are collected.
+- `metrics` files are logged as metrics; any other key (`model`, ...) is logged as artifacts under that name.
 - Metrics files are flat or nested JSON. Numeric leaves are logged; a `hardware` object, if present, is stored with the run.
 
 ## Benchmark JSON

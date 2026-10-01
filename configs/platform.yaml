@@ -1,0 +1,5 @@
+tracking_uri: http://localhost:5000
+container_tracking_uri: http://host.docker.internal:5000
+profiles_file: configs/hardware_profiles.yaml
+runs_dir: runs
+default_profile: pc-cpu

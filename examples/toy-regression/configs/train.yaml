@@ -1,0 +1,5 @@
+seed: 0
+samples: 2000
+noise: 0.3
+epochs: 50
+lr: 0.05
