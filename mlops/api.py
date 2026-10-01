@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import datasets, deploy, jobs, models
+from . import datasets, deploy, jobs, models, yaml_comments
 from .project import load_project
 from .run import load_profile
 from .config import ROOT, load_config, resolve
@@ -271,7 +271,9 @@ def project_config(project: str, path: str):
     target = (root / path).resolve()
     if not target.is_relative_to(root) or not target.is_file():
         raise HTTPException(404, "config not found")
-    return yaml.safe_load(target.read_text(encoding="utf-8")) or {}
+    text = target.read_text(encoding="utf-8")
+    header, comments = yaml_comments.read(text)
+    return {"values": yaml.safe_load(text) or {}, "description": header, "comments": comments}
 
 
 class JobSpec(BaseModel):

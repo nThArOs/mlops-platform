@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jobs, models } from "../api";
+import { paramHelp } from "../lib/params";
 import { useFetch } from "../lib/useFetch";
+import { Help } from "./InfoTip";
 import { ProfilePicker } from "./Benchmarks";
 import { Field, Loading, Modal, Note } from "./ui";
 
@@ -39,10 +41,11 @@ function coerce(raw: string, original: unknown): unknown {
 
 const show = (v: unknown) => (Array.isArray(v) ? JSON.stringify(v) : String(v ?? ""));
 
-export default function TrainDialog({ project, slot, benchProfiles = [], onClose }: {
+export default function TrainDialog({ project, slot, benchProfiles = [], constraints = {}, onClose }: {
   project: string;
   slot: string | null;
   benchProfiles?: string[];
+  constraints?: Record<string, Record<string, number>>;
   onClose: () => void;
 }) {
   const navigate = useNavigate();
@@ -51,7 +54,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
   const registry = useFetch(() => models.get(key).catch(() => null), [key]);
   const [evalPicked, setEvalPicked] = useState<Record<string, number | "">>({});
   const [config, setConfig] = useState<string | null>(null);
-  const base = useFetch(() => (config ? jobs.config(project, config) : Promise.resolve({})), [project, config]);
+  const base = useFetch(() => (config ? jobs.config(project, config) : Promise.resolve(null)), [project, config]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<Record<string, number | "">>({});
   const [profile, setProfile] = useState("");
@@ -69,7 +72,11 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
     setPicked((p) => (Object.keys(p).length ? p : Object.fromEntries(o.datasets.map((d) => [d.name, d.versions[0] ?? ""]))));
   }, [o]);
 
-  const flat = useMemo(() => flatten(base.data ?? {}), [base.data]);
+  const flat = useMemo(() => flatten(base.data?.values ?? {}), [base.data]);
+  const profileDetails = Object.fromEntries((o?.profiles ?? []).map((p) => [p.name, [
+    p.cpus ? `${p.cpus} CPU, ${p.memory}` : "whole machine",
+    constraints[p.name] ? "limits: " + Object.entries(constraints[p.name]).map(([k, v]) => `${k} ${v}`).join(", ") : "",
+  ].filter(Boolean).join(" · ")]));
   useEffect(() => { setValues(Object.fromEntries(Object.entries(flat).map(([k, v]) => [k, show(v)]))); }, [flat]);
 
   useEffect(() => {
@@ -119,16 +126,26 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
       {o && (
         <>
           <div className="form-grid">
-            <Field label="Start from config">
+            <Field label="Start from config" full help={
+              <Help title="Config">
+                <span>A YAML file of the project with the training settings. Its values are listed below and can be changed for this run only; the file itself stays untouched and the changed copy is saved with the run.</span>
+              </Help>}
+              hint={base.data?.description ?? undefined}>
               <select className="select mono" value={config ?? ""} onChange={(e) => setConfig(e.target.value)}>
                 {o.configs.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="Variant label" hint="Shown in the versions table. Default: the config name.">
+            <Field label="Variant label" hint="Shown in the versions table. Default: the config name." help={
+              <Help title="Variant">
+                <span>A short name for what is different in this version: the architecture, the number of epochs, the data. It helps to read the versions table and the accuracy against latency chart.</span>
+              </Help>}>
               <input className="input mono" value={variant} onChange={(e) => setVariant(e.target.value)}
                 placeholder={config?.split("/").pop()?.replace(/\.ya?ml$/, "") ?? ""} />
             </Field>
-            <Field label="Hardware profile">
+            <Field label="Hardware profile" help={
+              <Help title="Hardware profile">
+                <span>CPU and memory limits of the training container. Use pc-cpu to train on the whole machine; limited profiles are meant for benchmarks.</span>
+              </Help>}>
               <select className="select mono" value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {o.profiles.map((p) => (
                   <option key={p.name} value={p.name}>{p.name}{p.cpus ? ` (${p.cpus} CPU, ${p.memory})` : ""}</option>
@@ -138,7 +155,9 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
           </div>
 
           <div className="field">
-            <span className="field-label">Datasets</span>
+            <span className="field-label">Datasets<Help title="Datasets">
+              <span>Each dataset version is mounted read-only where the project expects it. The run is linked to these exact versions, so the new model always knows what it was trained on.</span>
+            </Help></span>
             {o.datasets.map((d) => (
               <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className="mono" style={{ flex: 1 }}>{d.name}</span>
@@ -153,12 +172,20 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
           </div>
 
           <div className="field">
-            <span className="field-label">Parameters {changed.length > 0 && <span className="faint">· {changed.length} changed</span>}</span>
+            <span className="field-label">Parameters{changed.length > 0 && <span className="faint"> · {changed.length} changed</span>}<Help title="Parameters">
+              <span>Values of the chosen config. Changed values are outlined and only apply to this run. Hover the icon of a parameter to see what it does.</span>
+            </Help></span>
             {base.loading && <Loading label="Reading config" />}
             <div className="params">
               {Object.keys(flat).map((k) => (
                 <label key={k} className={`param ${values[k] !== show(flat[k]) ? "changed" : ""}`}>
-                  <span className="mono">{k}</span>
+                  <span className="mono param-name">
+                    {k}
+                    {paramHelp(k, base.data?.comments) && (
+                      <Help title={k}><span>{paramHelp(k, base.data?.comments)}</span>
+                        <span className="faint mono">default in this config: {show(flat[k])}</span></Help>
+                    )}
+                  </span>
                   {typeof flat[k] === "boolean" ? (
                     <select className="select mono" value={values[k] ?? ""} onChange={(e) => setValues({ ...values, [k]: e.target.value })}>
                       <option value="true">true</option>
@@ -175,6 +202,9 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
           <label className="check">
             <input type="checkbox" checked={evaluate} onChange={(e) => setEvaluate(e.target.checked)} />
             Evaluate the new version when training ends, then compare it with production.
+            <Help title="Evaluation">
+              <span>Runs the project evaluate entrypoint on the new version, on the datasets below. They default to the versions production was evaluated on, so both are compared on the same data. The result feeds the promotion rule.</span>
+            </Help>
           </label>
           {evaluate && o.datasets.length > 0 && (
             <div className="field">
@@ -191,7 +221,7 @@ export default function TrainDialog({ project, slot, benchProfiles = [], onClose
               ))}
             </div>
           )}
-          <ProfilePicker profiles={o.profiles.map((p) => p.name)} picked={bench} onChange={setBench} />
+          <ProfilePicker profiles={o.profiles.map((p) => p.name)} picked={bench} onChange={setBench} details={profileDetails} />
           {error && <Note kind="error">{error}</Note>}
         </>
       )}

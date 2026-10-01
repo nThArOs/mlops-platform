@@ -301,7 +301,8 @@ export type JobRequest = {
 export const jobs = {
   options: (project: string) => request<ProjectOptions>(`/api/projects/${project}/options`),
   config: (project: string, path: string) =>
-    request<Record<string, unknown>>(`/api/projects/${project}/config?path=${encodeURIComponent(path)}`),
+    request<{ values: Record<string, unknown>; description: string | null; comments: Record<string, string> }>(
+      `/api/projects/${project}/config?path=${encodeURIComponent(path)}`),
   create: (body: JobRequest) => request<Job>("/api/jobs", json(body)),
   list: (model?: string) => request<Job[]>(`/api/jobs${model ? `?model=${encodeURIComponent(model)}` : ""}`),
   queue: () => request<QueueState>("/api/queue"),

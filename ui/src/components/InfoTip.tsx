@@ -18,6 +18,20 @@ function PrDiagram() {
   );
 }
 
+export function Help({ title, children, align = "left" }: { title: string; children: React.ReactNode; align?: "left" | "right" }) {
+  return (
+    <span className="tip" onClick={(e) => e.preventDefault()}>
+      <button type="button" className="tip-btn" aria-label={`About ${title}`}>
+        <Info size={13} strokeWidth={1.8} />
+      </button>
+      <span role="tooltip" className={`tip-panel ${align}`}>
+        <span className="tip-title">{title}</span>
+        {children}
+      </span>
+    </span>
+  );
+}
+
 export default function InfoTip({ metric, custom, align = "left" }: {
   metric: string;
   custom?: Record<string, string>;

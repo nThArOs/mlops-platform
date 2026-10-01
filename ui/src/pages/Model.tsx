@@ -403,6 +403,7 @@ export default function ModelPage() {
           onClose={() => setPromoting(null)} onDone={done} />
       )}
       {training && meta && <TrainDialog project={meta.project} slot={meta.slot} benchProfiles={Object.keys(meta.constraints)}
+        constraints={meta.constraints}
         onClose={() => setTraining(false)} />}
       {rollingBack && <RollbackDialog project={project} onClose={() => setRollingBack(false)} onDone={done} />}
     </>

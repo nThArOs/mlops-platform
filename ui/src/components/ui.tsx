@@ -58,10 +58,16 @@ export function Modal({ open, onClose, title, subtitle, children, footer }: {
   );
 }
 
-export function Field({ label, hint, children, full }: { label: string; hint?: string; children: ReactNode; full?: boolean }) {
+export function Field({ label, hint, help, children, full }: {
+  label: string;
+  hint?: string;
+  help?: ReactNode;
+  children: ReactNode;
+  full?: boolean;
+}) {
   return (
     <label className={`field ${full ? "full" : ""}`}>
-      <span className="field-label">{label}</span>
+      <span className="field-label">{label}{help}</span>
       {children}
       {hint && <span className="hint">{hint}</span>}
     </label>

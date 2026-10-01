@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Gauge, PackageOpen } from "lucide-react";
 import { jobs, type ModelSummary, type ModelVersion } from "../api";
 import { useFetch } from "../lib/useFetch";
-import InfoTip from "./InfoTip";
+import InfoTip, { Help } from "./InfoTip";
 import { Badge, Field, Modal, Note } from "./ui";
 
 const LIMITS: Record<string, [string, "max" | "min"]> = {
@@ -128,16 +128,30 @@ function ExportDialog({ meta, versions, onClose }: { meta: ModelSummary; version
   );
 }
 
-export function ProfilePicker({ profiles, picked, onChange }: { profiles: string[]; picked: string[]; onChange: (p: string[]) => void }) {
+export const BENCHMARK_HELP = (
+  <>
+    <span>Runs the project benchmark inside the container, with the CPU and memory limits of each profile, on a recorded video.</span>
+    <span>Measures latency per frame (p50, p95, p99) for the model alone and for the whole pipeline (decode, preprocessing, inference), frames per second, peak memory, model size, parameters and GFLOPs.</span>
+    <span>Results on Docker-limited profiles are estimates of the target hardware. A version needs a benchmark on every profile that has constraints before it can be promoted.</span>
+  </>
+);
+
+export function ProfilePicker({ profiles, picked, onChange, details }: {
+  profiles: string[];
+  picked: string[];
+  onChange: (p: string[]) => void;
+  details?: Record<string, string>;
+}) {
   return (
     <div className="field">
-      <span className="field-label">Benchmark on</span>
+      <span className="field-label">Benchmark on<Help title="Benchmark">{BENCHMARK_HELP}</Help></span>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         {profiles.map((name) => (
           <label key={name} className="check">
             <input type="checkbox" checked={picked.includes(name)}
               onChange={(e) => onChange(e.target.checked ? [...picked, name] : picked.filter((x) => x !== name))} />
             <span className="mono">{name}</span>
+            {details?.[name] && <span className="faint" style={{ fontSize: 12 }}>{details[name]}</span>}
           </label>
         ))}
       </div>

@@ -349,3 +349,7 @@ dialog.modal { width: min(720px, calc(100vw - 32px)); }
 .nav-pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--series-1); animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .progress-fill.indeterminate, .nav-pulse { animation: none; } }
+
+.param-name { display: inline-flex; align-items: center; min-width: 0; }
+.param .tip-panel { width: 280px; }
+.field .tip-panel { font-weight: 400; }

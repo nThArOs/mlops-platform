@@ -1,0 +1,41 @@
+// Common training parameters, used when the project config has no comment for a key.
+const PARAMS: Record<string, string> = {
+  init: "Starting weights. A pretrained file speeds up training and also sets the architecture.",
+  weights: "Starting weights. A pretrained file speeds up training and also sets the architecture.",
+  model: "Model definition or starting weights.",
+  epochs: "Number of full passes over the training data. More epochs learn more but take longer and can overfit.",
+  imgsz: "Input size in pixels. Larger helps small objects but is slower and uses more memory.",
+  batch: "Samples per optimization step. Lower it if memory runs out.",
+  batch_size: "Samples per optimization step. Lower it if memory runs out.",
+  patience: "Stop early after this many epochs without improvement on validation.",
+  workers: "Processes that load and prepare data in parallel.",
+  cache: "Keep data in memory between epochs instead of reading it again.",
+  project: "Folder where the training writes its outputs.",
+  fraction: "Share of the training data used, from 0 to 1. Useful for quick tests.",
+  lr: "Learning rate: the size of each update. Too high diverges, too low learns slowly.",
+  lr0: "Initial learning rate: the size of each update at the start of training.",
+  lrf: "Final learning rate, as a fraction of the initial one.",
+  learning_rate: "Learning rate: the size of each update. Too high diverges, too low learns slowly.",
+  optimizer: "Algorithm that updates the weights, for example SGD or AdamW.",
+  momentum: "How much each update keeps from the previous ones.",
+  weight_decay: "Penalty on large weights, limits overfitting.",
+  dropout: "Share of units switched off at random during training, limits overfitting.",
+  seed: "Random seed, so a run can be reproduced.",
+  mosaic: "Probability of combining four images into one, a strong augmentation for small objects.",
+  close_mosaic: "Turn mosaic off for the last epochs so the model ends on realistic images.",
+  fliplr: "Probability of flipping an image left to right.",
+  flipud: "Probability of flipping an image upside down.",
+  degrees: "Maximum random rotation, in degrees.",
+  scale: "Maximum random zoom in or out.",
+  hsv_h: "Random change of hue.",
+  hsv_s: "Random change of saturation.",
+  hsv_v: "Random change of brightness.",
+  conf: "Confidence threshold: predictions below it are dropped.",
+  iou: "Overlap threshold used to merge duplicate boxes.",
+  samples: "Number of generated samples.",
+  noise: "Amount of noise added to the generated data.",
+};
+
+export function paramHelp(key: string, comments?: Record<string, string>): string | null {
+  return comments?.[key] ?? PARAMS[key.split(".").pop() ?? key] ?? null;
+}
