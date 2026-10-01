@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Gauge, PackageOpen } from "lucide-react";
 import { jobs, type ModelSummary, type ModelVersion } from "../api";
+import { limitTone } from "../lib/health";
 import { useFetch } from "../lib/useFetch";
 import InfoTip, { Help } from "./InfoTip";
 import { Badge, Field, Modal, Note } from "./ui";
@@ -20,6 +21,14 @@ const LIMITS: Record<string, [string, "max" | "min"]> = {
 type Bench = Record<string, number | boolean | string>;
 const num = (b: Bench, k: string) => (typeof b[k] === "number" ? (b[k] as number) : undefined);
 const fmt = (v?: number, digits = 0) => (v === undefined ? "–" : v.toFixed(digits));
+
+// Class of a measured cell from the limit set on it for this profile, if any.
+function cellTone(bench: Bench, key: string, limits?: Record<string, number>): string {
+  const entry = Object.entries(limits ?? {}).find(([name]) => (LIMITS[name]?.[0] ?? name) === key);
+  const v = num(bench, key);
+  if (!entry || v === undefined) return "";
+  return limitTone(v, entry[1], LIMITS[entry[0]]?.[1] ?? "max");
+}
 
 function violations(bench: Bench, limits?: Record<string, number>): string[] {
   if (!limits) return [];
@@ -177,8 +186,11 @@ export function ProfilePicker({ profiles, picked, onChange }: {
   );
 }
 
-function Scatter({ points, primary }: { points: { label: string; x: number; y: number; ok: boolean }[]; primary: string }) {
+type Point = { label: string; x: number; y: number; ok: boolean; v: ModelVersion; b: Bench; bad: string[]; f1?: number };
+
+function Scatter({ points, primary, onSelect }: { points: Point[]; primary: string; onSelect?: (version: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<Point | null>(null);
   const [width, setWidth] = useState(520);
   useEffect(() => {
     const ro = new ResizeObserver(([e]) => setWidth(Math.max(260, e.contentRect.width)));
@@ -200,14 +212,33 @@ function Scatter({ points, primary }: { points: { label: string; x: number; y: n
         <text className="tick" x={width - P.r} y={H - 8} textAnchor="end">{xMax.toFixed(0)} ms</text>
         <text className="tick" x={P.l - 6} y={P.t + 8} textAnchor="end">{yMax.toFixed(0)}</text>
         {points.map((p) => (
-          <g key={p.label}>
-            <circle cx={sx(p.x)} cy={sy(p.y)} r={5} fill={p.ok ? "var(--series-1)" : "var(--series-2)"} stroke="var(--bg)" strokeWidth={2}>
-              <title>{`${p.label}: ${p.y.toFixed(2)} at ${p.x.toFixed(0)} ms`}</title>
-            </circle>
+          <g key={p.label} style={{ cursor: onSelect ? "pointer" : "default" }}
+            onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)} onClick={() => onSelect?.(p.v.version)}>
+            <circle cx={sx(p.x)} cy={sy(p.y)} r={14} fill="transparent" />
+            <circle cx={sx(p.x)} cy={sy(p.y)} r={hover === p ? 7 : 5} fill={p.ok ? "var(--series-1)" : "var(--series-2)"} stroke="var(--bg)" strokeWidth={2} />
             <text className="end-label" x={sx(p.x) + 9} y={sy(p.y) + 4}>{p.label}</text>
           </g>
         ))}
       </svg>
+      {hover && (
+        <div className="chart-tip scatter-tip" style={{ left: Math.min(sx(hover.x) + 14, width - 230), top: Math.max(sy(hover.y) - 20, 0) }}>
+          <div className="row"><span className="mono" style={{ fontWeight: 600 }}>{hover.label}</span>
+            {hover.v.variant && <span className="mono faint">{hover.v.variant}</span>}
+            <span className="faint">{hover.v.status}</span></div>
+          {hover.v.parent && <div className="faint">exported from {hover.v.parent}</div>}
+          <div className="tip-grid mono">
+            <span className="faint">{primary.replace(/^mean\./, "")}</span><span>{hover.y.toFixed(2)}</span>
+            {hover.f1 !== undefined && <><span className="faint">F1</span><span>{hover.f1.toFixed(2)}</span></>}
+            <span className="faint">latency p95</span><span>{hover.x.toFixed(0)} ms</span>
+            {num(hover.b, "fps") !== undefined && <><span className="faint">fps</span><span>{fmt(num(hover.b, "fps"), 2)}</span></>}
+            {num(hover.b, "ram_peak_mb") !== undefined && <><span className="faint">RAM peak</span><span>{fmt(num(hover.b, "ram_peak_mb"))} MB</span></>}
+            {num(hover.b, "model_mb") !== undefined && <><span className="faint">model</span><span>{fmt(num(hover.b, "model_mb"), 1)} MB</span></>}
+          </div>
+          <div className={hover.ok ? "faint" : ""} style={hover.ok ? undefined : { color: "var(--danger)" }}>
+            {hover.ok ? "within constraints" : hover.bad.join(", ")}</div>
+          {onSelect && <div className="faint">click to open its details</div>}
+        </div>
+      )}
       <div className="chart-legend" style={{ marginTop: 4 }}>
         <span><span className="key" style={{ background: "var(--series-1)" }} />within constraints</span>
         <span><span className="key" style={{ background: "var(--series-2)" }} />outside constraints</span>
@@ -216,7 +247,12 @@ function Scatter({ points, primary }: { points: { label: string; x: number; y: n
   );
 }
 
-export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSummary; versions: ModelVersion[]; dataset: string | null }) {
+export default function Benchmarks({ meta, versions, dataset, onSelect }: {
+  meta: ModelSummary;
+  versions: ModelVersion[];
+  dataset: string | null;
+  onSelect?: (version: number) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const rows = versions.flatMap((v) => Object.entries(v.benchmarks ?? {}).map(([profile, b]) => ({ v, profile, b })));
@@ -224,7 +260,11 @@ export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSum
   const [profile, setProfile] = useState<string | null>(null);
   const shown = profile ?? (Object.keys(meta.constraints).find((p) => profiles.includes(p)) ?? profiles[0] ?? null);
   const points = rows.filter((r) => r.profile === shown && dataset && r.v.evaluations[dataset]?.[meta.primary] !== undefined && num(r.b, "latency_ms.p95") !== undefined)
-    .map((r) => ({ label: `v${r.v.version}`, x: num(r.b, "latency_ms.p95")!, y: r.v.evaluations[dataset!][meta.primary], ok: violations(r.b, meta.constraints[r.profile]).length === 0 }));
+    .map((r) => {
+      const bad = violations(r.b, meta.constraints[r.profile]);
+      return { label: `v${r.v.version}`, x: num(r.b, "latency_ms.p95")!, y: r.v.evaluations[dataset!][meta.primary], ok: bad.length === 0, v: r.v, b: r.b, bad,
+        f1: r.v.evaluations[dataset!]["mean.F1"] };
+    });
 
   return (
     <div className="section">
@@ -259,13 +299,13 @@ export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSum
                   <tr key={`${v.version}-${p}`}>
                     <td className="mono">v{v.version}{v.variant && <span className="faint"> {v.variant}</span>}</td>
                     <td><span className="mono">{p}</span>{!b._measured && <span className="faint" style={{ marginLeft: 6 }}>estimated</span>}</td>
-                    <td className="num mono">{fmt(num(b, "latency_ms.p50"))}</td>
-                    <td className="num mono">{fmt(num(b, "latency_ms.p95"))}</td>
-                    <td className="num mono">{fmt(num(b, "latency_ms.p99"))}</td>
-                    <td className="num mono">{fmt(num(b, "end_to_end_ms.p95"))}</td>
-                    <td className="num mono">{fmt(num(b, "fps"), 2)}</td>
-                    <td className="num mono">{fmt(num(b, "ram_peak_mb"))}</td>
-                    <td className="num mono">{fmt(num(b, "model_mb"), 1)}</td>
+                    <td className={`num mono ${cellTone(b, "latency_ms.p50", meta.constraints[p])}`}>{fmt(num(b, "latency_ms.p50"))}</td>
+                    <td className={`num mono ${cellTone(b, "latency_ms.p95", meta.constraints[p])}`}>{fmt(num(b, "latency_ms.p95"))}</td>
+                    <td className={`num mono ${cellTone(b, "latency_ms.p99", meta.constraints[p])}`}>{fmt(num(b, "latency_ms.p99"))}</td>
+                    <td className={`num mono ${cellTone(b, "end_to_end_ms.p95", meta.constraints[p])}`}>{fmt(num(b, "end_to_end_ms.p95"))}</td>
+                    <td className={`num mono ${cellTone(b, "fps", meta.constraints[p])}`}>{fmt(num(b, "fps"), 2)}</td>
+                    <td className={`num mono ${cellTone(b, "ram_peak_mb", meta.constraints[p])}`}>{fmt(num(b, "ram_peak_mb"))}</td>
+                    <td className={`num mono ${cellTone(b, "model_mb", meta.constraints[p])}`}>{fmt(num(b, "model_mb"), 1)}</td>
                     <td className="num mono">{fmt(num(b, "gflops"), 1)}</td>
                     <td>{!meta.constraints[p] ? <span className="faint">no limits</span> : bad.length === 0
                       ? <Badge tone="success">fits</Badge> : <span title={bad.join("\n")}><Badge tone="danger">{bad.length} over</Badge></span>}</td>
@@ -281,7 +321,7 @@ export default function Benchmarks({ meta, versions, dataset }: { meta: ModelSum
                   {profiles.map((p) => <button key={p} className={p === shown ? "on" : ""} onClick={() => setProfile(p)}>{p}</button>)}
                 </div>
               )}
-              <Scatter points={points} primary={meta.primary} />
+              <Scatter points={points} primary={meta.primary} onSelect={onSelect} />
             </div>
           )}
         </>

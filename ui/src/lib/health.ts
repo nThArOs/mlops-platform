@@ -54,3 +54,16 @@ export function againstBest(value: number, best: number, version: number | undef
   if (g >= -TOLERANCE) return { tone: "good", note: "best of the versions" };
   return { tone: g >= -0.1 ? "warning" : "danger", note: `v${version} is ${Math.round(-g * 100)} % better` };
 }
+
+// A measure against a hard limit: comfortable, tight but passing, or failing.
+export function limitTone(value: number, limit: number, kind: "max" | "min"): Tone {
+  if (kind === "max") return value > limit ? "danger" : value >= 0.7 * limit ? "warning" : "good";
+  return value < limit ? "danger" : value < 1.2 * limit ? "warning" : "good";
+}
+
+export function compared(value: number, ref: number, refVersion: number, better: "higher" | "lower"): Health | undefined {
+  const g = gain(value, ref, better);
+  const tone = versus(value, ref, better);
+  if (!tone) return { tone: "good", note: `on par with v${refVersion}` };
+  return { tone, note: `${Math.round(Math.abs(g) * 100)} % ${g > 0 ? "better" : "worse"} than v${refVersion}` };
+}

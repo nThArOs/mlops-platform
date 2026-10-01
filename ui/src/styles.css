@@ -385,3 +385,6 @@ td.num.danger { background: var(--danger-bg); color: var(--danger); }
 .cm-layout > .derived { flex: 1 1 0; }
 .cm td { height: 120px; font-size: 18px; }
 .cm .cm-tag { font-size: 12px; margin-bottom: 6px; }
+td.num.warning { background: var(--warning-bg); color: var(--warning); }
+.scatter-tip { display: flex; flex-direction: column; gap: 4px; white-space: normal; width: 220px; }
+.tip-grid { display: grid; grid-template-columns: auto 1fr; gap: 1px 12px; }

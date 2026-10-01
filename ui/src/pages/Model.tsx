@@ -383,7 +383,7 @@ export default function ModelPage() {
       </table>
 
       {cmShown && dataset && (
-        <div className="section">
+        <div className="section" id="version-details">
           <div className="section-head">
             <h2 className="section-title">Version details</h2>
             <span className="status-line">
@@ -394,11 +394,15 @@ export default function ModelPage() {
               <span>on <span className="mono">{dataset}</span></span>
             </span>
           </div>
-          {meta && <VersionDetails version={cmShown} dataset={dataset} meta={meta} />}
+          {meta && <VersionDetails version={cmShown} dataset={dataset} meta={meta}
+            production={versions.find((v) => v.version === detail.data!.production)} />}
         </div>
       )}
 
-      {meta && <Benchmarks meta={meta} versions={versions} dataset={dataset} />}
+      {meta && <Benchmarks meta={meta} versions={versions} dataset={dataset} onSelect={(n) => {
+        setCmVersion(n);
+        document.getElementById("version-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }} />}
 
       <RecentRuns model={project} />
 

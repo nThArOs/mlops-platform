@@ -1,5 +1,6 @@
 import type { ModelSummary, ModelVersion } from "../api";
 import { lookup } from "../lib/glossary";
+import { compared } from "../lib/health";
 import ConfusionMatrix from "./ConfusionMatrix";
 import InfoTip from "./InfoTip";
 import LineChart from "./LineChart";
@@ -46,7 +47,17 @@ function SliceBars({ name, values, counts, edges }: {
   );
 }
 
-export default function VersionDetails({ version, dataset, meta }: { version: ModelVersion; dataset: string; meta: ModelSummary }) {
+export default function VersionDetails({ version, dataset, meta, production }: {
+  version: ModelVersion;
+  dataset: string;
+  meta: ModelSummary;
+  production?: ModelVersion;
+}) {
+  const reference = production && production.version !== version.version ? production.evaluations[dataset] : undefined;
+  const health = (k: string, v: number) => {
+    const better = lookup(k)?.better;
+    return reference?.[k] !== undefined && better ? compared(v, reference[k], production!.version, better) : undefined;
+  };
   const metrics = version.evaluations[dataset] ?? {};
   const extras = version.extras?.[dataset] ?? {};
   const operational = Object.keys(metrics).filter((k) => k.startsWith("operational.") && !HIDDEN.has(k));
@@ -62,7 +73,8 @@ export default function VersionDetails({ version, dataset, meta }: { version: Mo
       {operational.length > 0 && (
         <div className="stats" style={{ marginBottom: 24 }}>
           {operational.map((k) => (
-            <Stat key={k} label={<>{nice(k)}<InfoTip metric={k} custom={meta.descriptions} /></>} value={number(metrics[k])} />
+            <Stat key={k} label={<>{nice(k)}<InfoTip metric={k} custom={meta.descriptions} /></>} value={number(metrics[k])}
+              health={health(k, metrics[k])} />
           ))}
         </div>
       )}
