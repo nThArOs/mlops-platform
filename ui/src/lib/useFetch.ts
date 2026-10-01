@@ -16,7 +16,6 @@ export function useFetch<T>(load: () => Promise<T>, deps: unknown[]) {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);

@@ -164,7 +164,6 @@ def model_command(args) -> int:
 
 
 def main(argv=None) -> int:
-    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
     os.environ.setdefault("MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT", "1")
     import mlflow  # noqa: F401  configures its loggers on import
 
