@@ -137,6 +137,13 @@ export type ModelVersion = {
   trained_on: string[];
   evaluations: Record<string, Record<string, number>>;
   confusion: Record<string, { labels: string[]; matrix: (number | null)[][]; rows?: string; columns?: string }>;
+  extras: Record<string, Extras>;
+};
+
+export type Extras = {
+  curves?: Record<string, Record<string, number[]>>;
+  slices?: Record<string, Record<string, number | null> | number[]>;
+  intervals?: Record<string, [number, number]>;
 };
 
 export type ModelEvent = {

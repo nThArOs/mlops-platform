@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { models, type ModelEvent, type ModelSummary } from "../api";
-import ConfusionMatrix from "../components/ConfusionMatrix";
+import VersionDetails from "../components/VersionDetails";
 import InfoTip from "../components/InfoTip";
 import TrainDialog from "../components/TrainDialog";
 import { Badge, Field, Loading, Modal, Note } from "../components/ui";
@@ -112,6 +112,15 @@ function RollbackDialog({ project, onClose, onDone }: { project: string; onClose
   );
 }
 
+function Interval({ range }: { range?: [number, number] }) {
+  if (!range) return null;
+  return (
+    <span className="interval" title="95 % interval when the evaluation sequences are resampled">
+      {metric(range[0])}–{metric(range[1])}
+    </span>
+  );
+}
+
 function History({ events }: { events: ModelEvent[] }) {
   if (events.length === 0) return <p className="muted">Nothing has happened yet.</p>;
   return (
@@ -172,7 +181,7 @@ export default function ModelPage() {
   const available = dataset ? new Set(versions.flatMap((v) => Object.keys(v.evaluations[dataset] ?? {}))) : new Set<string>();
   const watched = (meta?.watch ?? []).filter((k) => k !== primary && available.has(k));
   const others = (watched.length ? watched : [...available].filter((k) => k !== primary)).slice(0, 4);
-  const withCm = dataset ? versions.filter((v) => v.confusion?.[dataset]) : [];
+  const withCm = dataset ? versions.filter((v) => v.evaluations[dataset]) : [];
   const cmShown = withCm.find((v) => v.version === cmVersion)
     ?? withCm.find((v) => v.version === detail.data!.production) ?? withCm[withCm.length - 1];
   const canRollback = detail.data!.history.some((e) => e.to_version === detail.data!.production && e.from_version);
@@ -247,8 +256,14 @@ export default function ModelPage() {
                 </td>
                 <td className="num mono" style={{ fontWeight: value !== undefined && value === best ? 600 : 400 }}>
                   {value === undefined ? <span className="faint">not evaluated</span> : metric(value)}
+                  <Interval range={dataset ? v.extras?.[dataset]?.intervals?.[primary] : undefined} />
                 </td>
-                {others.map((k) => <td key={k} className="num mono muted">{metric(m?.[k])}</td>)}
+                {others.map((k) => (
+                  <td key={k} className="num mono muted">
+                    {metric(m?.[k])}
+                    <Interval range={dataset ? v.extras?.[dataset]?.intervals?.[k] : undefined} />
+                  </td>
+                ))}
                 <td>
                   {info.data && (
                     <a className="mono muted" href={`${info.data.mlflow_url}/#/runs/${v.run_id}`} target="_blank" rel="noreferrer">
@@ -270,7 +285,7 @@ export default function ModelPage() {
       {cmShown && dataset && (
         <div className="section">
           <div className="section-head">
-            <h2 className="section-title">Confusion matrix<InfoTip metric="confusion" /></h2>
+            <h2 className="section-title">Version details</h2>
             <span className="status-line">
               <span>version</span>
               <select className="select mono" value={cmShown.version} onChange={(e) => setCmVersion(Number(e.target.value))}>
@@ -279,7 +294,7 @@ export default function ModelPage() {
               <span>on <span className="mono">{dataset}</span></span>
             </span>
           </div>
-          <ConfusionMatrix data={cmShown.confusion[dataset]} />
+          {meta && <VersionDetails version={cmShown} dataset={dataset} meta={meta} />}
         </div>
       )}
 

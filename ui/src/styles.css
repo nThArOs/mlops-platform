@@ -305,3 +305,9 @@ dialog.modal::backdrop { background: var(--overlay); }
 .param.changed .input, .param.changed .select { border-color: var(--series-1); }
 dialog.modal { width: min(720px, calc(100vw - 32px)); }
 @media (max-width: 860px) { .params { grid-template-columns: 1fr; } }
+
+.interval { display: block; font-size: 11px; color: var(--text-3); font-weight: 400; }
+.slices { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+.slice-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 64px 84px; gap: 10px; align-items: center; font-size: 13px; }
+.slice-track { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.slice-bar { display: block; height: 100%; background: var(--series-1); border-radius: 999px; }

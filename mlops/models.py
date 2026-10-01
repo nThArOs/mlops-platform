@@ -62,20 +62,28 @@ def download(project: str, version: int, dst: Path) -> Path:
 
 
 def record_evaluation(project: str, version: int, run_id: str, dataset_version_ids: list[int],
-                      metrics: dict[str, float], confusion: dict | None = None) -> None:
+                      metrics: dict[str, float], confusion: dict | None = None, extras: dict | None = None) -> None:
     with db.engine().begin() as conn:
         for dv in dataset_version_ids:
             conn.execute(sa.insert(db.model_evaluations).values(
                 project=project, model_version=version, run_id=run_id, dataset_version_id=dv, metrics=metrics,
-                confusion=confusion))
+                confusion=confusion, extras=extras))
 
 
 def confusion_matrices(project: str, version: int) -> dict[int, dict]:
+    return _latest_column(project, version, "confusion")
+
+
+def evaluation_extras(project: str, version: int) -> dict[int, dict]:
+    return _latest_column(project, version, "extras")
+
+
+def _latest_column(project: str, version: int, column: str) -> dict[int, dict]:
     e = db.model_evaluations
-    query = (sa.select(e.c.dataset_version_id, e.c.confusion)
+    query = (sa.select(e.c.dataset_version_id, e.c[column])
              .where(e.c.project == project, e.c.model_version == version).order_by(e.c.id))
     with db.engine().connect() as conn:
-        return {dv: cm for dv, cm in conn.execute(query) if cm}
+        return {dv: value for dv, value in conn.execute(query) if value}
 
 
 def evaluations(project: str, version: int) -> dict[int, dict]:
@@ -121,6 +129,7 @@ def list_versions(project: str) -> list[dict]:
             "trained_on": train_datasets(mv.run_id),
             "evaluations": {ref_of(dv): m for dv, m in evaluations(project, version).items()},
             "confusion": {ref_of(dv): cm for dv, cm in confusion_matrices(project, version).items()},
+            "extras": {ref_of(dv): x for dv, x in evaluation_extras(project, version).items()},
         })
     return out
 

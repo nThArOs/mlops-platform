@@ -109,6 +109,7 @@ def log(job_id: int, offset: int = 0, limit: int = 200_000) -> dict:
         data = f.read(limit)
     text = data.decode("utf-8", errors="replace")
     # progress bars redraw the same line with \r: keep only the last state of each line
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
     text = "\n".join(line.split("\r")[-1] for line in text.replace("\r\n", "\n").split("\n"))
     return {"text": text, "offset": offset + len(data)}
 

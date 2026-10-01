@@ -115,6 +115,10 @@ The command runs with `sh -c` in the project image, with the project root mounte
 - `metrics` files are logged as metrics; any other key (`model`, ...) is logged as artifacts under that name.
 - Metrics files are flat or nested JSON. Numeric leaves are logged; a `hardware` object, if present, is stored with the run.
 - A top-level `confusion_matrix` object is stored with the evaluation and shown as a heatmap: `{"labels": [...], "matrix": [[...]], "rows": "ground truth", "columns": "prediction"}`. Use `null` for cells that are not measured.
+- Optional top-level objects shown on the model page:
+  - `curves`: `{"<name>": {"x": [...], "<series>": [...], ...}}`, for example precision, recall and F1 against the confidence threshold.
+  - `slices`: `{"<name>": {"<slice>": value}}`, for example recall by object size.
+  - `intervals`: `{"<metric key>": [low, high]}`, 95 % intervals shown next to the metric.
 
 ## Benchmark JSON
 

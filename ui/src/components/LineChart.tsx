@@ -14,9 +14,10 @@ function niceMax(v: number): number {
 
 const time = (t: number) => new Date(t * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
-export default function LineChart({ title, info, series, format, height = 150 }: {
+export default function LineChart({ title, info, series, format, xFormat = time, height = 150 }: {
   title: string;
   info?: string;
+  xFormat?: (x: number) => string;
   series: Series[];
   format: (v: number) => string;
   height?: number;
@@ -78,8 +79,8 @@ export default function LineChart({ title, info, series, format, height = 150 }:
               <text className="tick" x={PAD.left - 8} y={sy(yMax * f) + 3.5} textAnchor="end">{format(yMax * f)}</text>
             </g>
           ))}
-          <text className="tick" x={PAD.left} y={height - 4}>{time(x0)}</text>
-          <text className="tick" x={PAD.left + w} y={height - 4} textAnchor="end">{time(x1)}</text>
+          <text className="tick" x={PAD.left} y={height - 4}>{xFormat(x0)}</text>
+          <text className="tick" x={PAD.left + w} y={height - 4} textAnchor="end">{xFormat(x1)}</text>
           {filled.map((s) => {
             const d = s.points.map((p, i) => `${i ? "L" : "M"}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join("");
             const last = s.points[s.points.length - 1];
@@ -102,7 +103,7 @@ export default function LineChart({ title, info, series, format, height = 150 }:
       )}
       {hover !== null && (
         <div className="chart-tip" style={{ left: Math.min(sx(hover) + 12, width - 150) }}>
-          <div className="faint mono">{time(hover)}</div>
+          <div className="faint mono">{xFormat(hover)}</div>
           {filled.map((s) => {
             const p = s.points.find((q) => q[0] === hover);
             return (

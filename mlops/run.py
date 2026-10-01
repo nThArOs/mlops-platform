@@ -262,7 +262,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
 
         outputs = collect_outputs(project, {k: render_command(v, slot_vars) for k, v in ep.outputs.items()}, started)
         metric_files = outputs.get("metrics", [])
-        all_metrics, confusion = {}, None
+        all_metrics, confusion, extras = {}, None, {}
         for path in metric_files:
             data = json.loads(path.read_text(encoding="utf-8"))
             metrics = flatten_metrics(data)
@@ -271,6 +271,8 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
             all_metrics.update(metrics)
             if isinstance(data, dict) and isinstance(data.get("confusion_matrix"), dict) and confusion is None:
                 confusion = data["confusion_matrix"]
+            if isinstance(data, dict):
+                extras.update({k: data[k] for k in ("curves", "slices", "intervals") if isinstance(data.get(k), dict)})
             if isinstance(data, dict) and isinstance(data.get("hardware"), dict):
                 mlflow.log_dict(data["hardware"], f"hardware_{path.stem}.json")
             mlflow.log_artifact(str(path), "metrics")
@@ -297,7 +299,7 @@ def run_entrypoint(project: Project, entrypoint: str, profile_name: str | None =
         print(f"registered {key}@v{version} (candidate)")
     if status == "FINISHED" and entrypoint == "evaluate" and registry_model and mounted and all_metrics:
         models.record_evaluation(registry_model[0], registry_model[1], run_id, [v["id"] for v, _ in mounted],
-                                 all_metrics, confusion)
+                                 all_metrics, confusion, extras or None)
         print(f"evaluation of {registry_model[0]}@v{registry_model[1]} recorded")
     print(f"{status.lower()} in {duration:.1f}s, exit code {returncode}")
     print(f"{cfg['tracking_uri']}/#/experiments/{run.info.experiment_id}/runs/{run_id}")

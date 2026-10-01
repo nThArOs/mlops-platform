@@ -56,6 +56,32 @@ const G: Record<string, Entry> = {
   predictions_per_input: { title: "Predictions per input", what: "Average number of objects predicted per frame or request. A sudden change often means the input data changed." },
   confidence: { title: "Mean confidence", what: "Average score the model gives to its predictions. A slow drop over days is a common sign of data drift." },
   stages: { title: "Time per stage", what: "Average time spent per frame in each step of the pipeline. Shows what to optimize first for an embedded target." },
+  false_alarms_per_hour: {
+    title: "False alarms per hour",
+    what: "Predicted tracks that are not a real object, counted once per track and scaled to one hour of video. A track is false when most of its boxes match no annotation.",
+    formula: "false tracks / hours of video",
+    better: "lower",
+  },
+  time_with_false_alarm_pct: {
+    title: "Time with a false alarm",
+    what: "Share of frames where at least one false box is on screen. Separates brief flashes from false alarms that stay displayed.",
+    formula: "frames with a false box / frames",
+    better: "lower",
+  },
+  false_tracks: { title: "False tracks", what: "Predicted tracks whose boxes mostly match no annotated object.", better: "lower" },
+  median: { title: "Detection delay, median", what: "Time between the first frame an object is annotated and its first correct detection, median over objects.", better: "lower" },
+  p90: { title: "Detection delay, p90", what: "Detection delay that 90 % of objects stay under.", better: "lower" },
+  tracks: { title: "Annotated tracks", what: "Number of distinct annotated objects in the evaluation set." },
+  tracks_never_detected: { title: "Never detected", what: "Annotated objects that were never correctly detected, in any frame.", better: "lower" },
+  threshold_curve: {
+    title: "Threshold curve",
+    what: "Precision, recall and F1 when only predictions above a confidence threshold are kept. Raising the threshold removes false alarms but also real objects; pick the point that fits the use case.",
+  },
+  recall_by_size: {
+    title: "Recall by object size",
+    what: "Share of annotated objects found, split by their size in pixels (square root of the box area). Far drones are small.",
+    better: "higher",
+  },
   confusion: {
     title: "Confusion matrix",
     what: "Rows are what was really there, columns what the model predicted. The diagonal is correct; the background row holds false alarms and the background column holds misses.",

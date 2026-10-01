@@ -67,6 +67,7 @@ model_evaluations = sa.Table(
     sa.Column("dataset_version_id", sa.ForeignKey("dataset_versions.id"), nullable=False),
     sa.Column("metrics", sa.JSON, nullable=False),
     sa.Column("confusion", sa.JSON),
+    sa.Column("extras", sa.JSON),
     _created(),
 )
 
@@ -89,6 +90,7 @@ jobs = sa.Table(
 
 MIGRATIONS = [
     "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS confusion JSON",
+    "ALTER TABLE model_evaluations ADD COLUMN IF NOT EXISTS extras JSON",
 ]
 
 model_events = sa.Table(
